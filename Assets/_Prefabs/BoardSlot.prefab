@@ -2150,6 +2150,7 @@ MonoBehaviour:
   attackArrows: {fileID: 513796302162385233}
   tileSurface: {fileID: 8024547667028290198}
   portrait: {fileID: 8215441325511765829}
+  defeatedPortraitTint: {r: 0.4, g: 0.4, b: 0.4, a: 1}
   statsBacking: {fileID: 7896406307105882169}
   holdPreview: {fileID: 818904365023245139}
   cardImage: {fileID: 1093606851839586160}

@@ -24,7 +24,8 @@ public sealed class CardPreviewView : MonoBehaviour
         title.text = definition.Name;
         stats.text = definition.IsSupportCard
             ? definition.Type == CardType.HiSupporter ? "HI SUPPORT" : "SUPPORT"
-            : $"{definition.Attack} ATK     {definition.Defense} DEF     {card.CurrentHealth} / {definition.Health} HP";
+            : definition.Type == CardType.Equip ? "EQUIP"
+            : $"{definition.Attack} ATK     {card.Defense} DEF     {card.CurrentHealth} / {card.MaxHealth} HP";
 
         // The prefab stores arrows in reading order, with no center entry.
         int arrowIndex = 0;
@@ -33,7 +34,7 @@ public sealed class CardPreviewView : MonoBehaviour
             for (int x = -1; x <= 1; x++)
             {
                 if (x == 0 && y == 0) continue;
-                arrows[arrowIndex++].SetActive(definition.AttackDirections.Contains(new CardDirection(x, y)));
+                arrows[arrowIndex++].SetActive(card.AttackDirections.Contains(new CardDirection(x, y)));
             }
         }
 
@@ -42,6 +43,14 @@ public sealed class CardPreviewView : MonoBehaviour
         {
             description.AppendLine(definition.SupportEffect?.Description);
             description.Append(definition.SupportCondition?.Description);
+        }
+        if (definition.Type == CardType.Equip)
+            description.Append(definition.EquipEffect?.Description);
+        foreach (CardInstance equipment in card.Equipment)
+        {
+            if (description.Length > 0) description.AppendLine().AppendLine();
+            description.Append("<b>Equipped: ").Append(equipment.Definition.Name).AppendLine("</b>")
+                .Append(equipment.Definition.EquipEffect.Description);
         }
         foreach (MonsterEffectEntry entry in definition.MonsterEffects)
         {

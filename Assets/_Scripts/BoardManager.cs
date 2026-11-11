@@ -78,9 +78,11 @@ public class BoardManager : MonoBehaviour
         {
             for (int x = 0; x < WIDTH; x++)
             {
-                CardInstance card = state.GetCardAt(x, y);
-                if (card == null) grid[x, y].ClearSlot();
-                else grid[x, y].PlaceCard(card, state);
+                BoardCellState cellState = state.GetCellState(x, y);
+                if (cellState == BoardCellState.Occupied)
+                    grid[x, y].PlaceCard(state.GetCardAt(x, y), state);
+                else
+                    grid[x, y].ClearSlot(cellState, state.IsPlacementBlockedNextTurn(x, y));
             }
         }
     }

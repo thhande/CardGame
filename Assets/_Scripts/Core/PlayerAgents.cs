@@ -23,12 +23,21 @@ public sealed class RandomPlayerAgent : IPlayerAgent
 
         for (int i = 0; i < state.EnemyHand.Count; i++)
         {
-            if (state.EnemyHand[i].Definition.IsSupportCard
-                && MatchRules.CanPlaySupportCard(state, PlayerSide.Enemy, state.EnemyHand[i].Id))
+            CardInstance card = state.EnemyHand[i];
+            if (card.Definition.IsSupportCard
+                && MatchRules.CanPlaySupportCard(state, PlayerSide.Enemy, card.Id, out var targetCell))
             {
-                submitAction(new PlaySupportCardAction(state.Id, PlayerSide.Enemy, state.EnemyHand[i].Id));
+                submitAction(targetCell is { } cell
+                    ? new PlaySupportCardAction(state.Id, PlayerSide.Enemy, card.Id, cell.X, cell.Y)
+                    : new PlaySupportCardAction(state.Id, PlayerSide.Enemy, card.Id));
                 return;
             }
+        }
+
+        if (TryFindEquipPlay(state, out PlayEquipCardAction equipPlay))
+        {
+            submitAction(equipPlay);
+            return;
         }
 
         long playableCardId = -1;
@@ -41,17 +50,17 @@ public sealed class RandomPlayerAgent : IPlayerAgent
             }
         }
 
-        List<int> emptyCellIndices = new List<int>();
+        List<int> openCellIndices = new List<int>();
         for (int y = 0; y < MatchState.Height; y++)
         {
             for (int x = 0; x < MatchState.Width; x++)
             {
-                if (state.GetCardAt(x, y) == null)
-                    emptyCellIndices.Add(y * MatchState.Width + x);
+                if (MatchRules.CanPlaceAt(state, x, y))
+                    openCellIndices.Add(y * MatchState.Width + x);
             }
         }
 
-        if (state.EnemySummonsRemaining <= 0 || playableCardId < 0 || emptyCellIndices.Count == 0)
+        if (state.EnemySummonsRemaining <= 0 || playableCardId < 0 || openCellIndices.Count == 0)
         {
             if (TryFindAttack(state, out long attackerId, out CardDirection direction))
             {
@@ -64,9 +73,32 @@ public sealed class RandomPlayerAgent : IPlayerAgent
             return;
         }
 
-        int cellIndex = emptyCellIndices[random.Next(emptyCellIndices.Count)];
+        int cellIndex = openCellIndices[random.Next(openCellIndices.Count)];
         submitAction(new PlaceCardAction(state.Id, PlayerSide.Enemy, playableCardId,
             cellIndex % MatchState.Width, cellIndex / MatchState.Width));
+    }
+
+    private static bool TryFindEquipPlay(MatchState state, out PlayEquipCardAction action)
+    {
+        foreach (CardInstance equipment in state.EnemyHand)
+        {
+            if (equipment.Definition.Type != CardType.Equip) continue;
+            for (int y = 0; y < MatchState.Height; y++)
+            {
+                for (int x = 0; x < MatchState.Width; x++)
+                {
+                    CardInstance target = state.GetCardAt(x, y);
+                    if (target == null || !MatchRules.CanPlayEquipCard(state, PlayerSide.Enemy, equipment.Id, target.Id))
+                        continue;
+
+                    action = new PlayEquipCardAction(state.Id, PlayerSide.Enemy, equipment.Id, target.Id);
+                    return true;
+                }
+            }
+        }
+
+        action = null;
+        return false;
     }
 
     private static bool TryFindAttack(MatchState state, out long attackerId, out CardDirection direction)
@@ -80,9 +112,9 @@ public sealed class RandomPlayerAgent : IPlayerAgent
                     || card.Definition.Type != CardType.Monster)
                     continue;
 
-                for (int i = 0; i < card.Definition.AttackDirections.Count; i++)
+                for (int i = 0; i < card.AttackDirections.Count; i++)
                 {
-                    CardDirection candidate = card.Definition.AttackDirections[i];
+                    CardDirection candidate = card.AttackDirections[i];
                     if (MatchRules.CanAttack(state, PlayerSide.Enemy, card.Id, candidate))
                     {
                         attackerId = card.Id;

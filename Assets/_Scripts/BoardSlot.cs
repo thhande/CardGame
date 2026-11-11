@@ -20,6 +20,7 @@ public class BoardSlot : MonoBehaviour
     public TextMeshProUGUI statsText;
     [SerializeField] private Image tileSurface;
     [SerializeField] private Image portrait;
+    [SerializeField] private Color defeatedPortraitTint;
     [SerializeField] private Image statsBacking;
     [SerializeField] private TMP_Text coordinatesLabel;
     [SerializeField] private GameObject attackArrows;
@@ -60,11 +61,12 @@ public class BoardSlot : MonoBehaviour
         {
             portrait.transform.parent.gameObject.SetActive(true);
             SetPortrait(portrait, matchManager != null ? matchManager.GetArtwork(card.Definition) : null);
+            portrait.color = card.CurrentHealth <= 0 ? defeatedPortraitTint : Color.white;
         }
         if (statsText != null)
         {
             statsText.enabled = true;
-            statsText.text = $"<b>{card.Definition.Name}</b>\n<size=13><color=#F1C881>{card.Definition.Attack} ATK {card.Definition.Defense} DEF {card.CurrentHealth} HP</color></size>";
+            statsText.text = $"<b>{card.Definition.Name}</b>\n<size=13><color=#F1C881>{card.Definition.Attack} ATK {card.Defense} DEF {card.CurrentHealth} HP</color></size>";
         }
         if (statsBacking != null) statsBacking.enabled = true;
         if (coordinatesLabel != null) coordinatesLabel.enabled = false;
@@ -75,11 +77,17 @@ public class BoardSlot : MonoBehaviour
 
     public void ClearSlot()
     {
+        ClearSlot(BoardCellState.Empty, false);
+    }
+
+    internal void ClearSlot(BoardCellState state, bool blocksNextTurn)
+    {
+        bool blocked = state == BoardCellState.Blocked;
         holdPreview?.Cancel();
         HideAttackButtons();
         if (monsterEffectButton != null) monsterEffectButton.gameObject.SetActive(false);
         placedCard = null;
-        if (cardImage != null) cardImage.color = Rim;
+        if (cardImage != null) cardImage.color = blocked ? Copper : blocksNextTurn ? Brass : Rim;
         if (tileSurface != null) tileSurface.color = EmptySurface;
         if (portrait != null) portrait.transform.parent.gameObject.SetActive(false);
         if (statsBacking != null) statsBacking.enabled = false;
@@ -87,6 +95,8 @@ public class BoardSlot : MonoBehaviour
         if (coordinatesLabel != null)
         {
             coordinatesLabel.text = $"{(char)('A' + x)}{y + 1}";
+            if (blocked) coordinatesLabel.text += "\n<size=12>BLOCKED</size>";
+            else if (blocksNextTurn) coordinatesLabel.text += "\n<size=12>BLOCKS NEXT TURN</size>";
             coordinatesLabel.enabled = true;
         }
     }
@@ -108,7 +118,7 @@ public class BoardSlot : MonoBehaviour
         attackArrows.SetActive(true);
         foreach (KeyValuePair<CardDirection, Button> entry in attackButtons)
         {
-            bool supported = HasAttackDirection(attacker.Definition.AttackDirections, entry.Key);
+            bool supported = HasAttackDirection(attacker.AttackDirections, entry.Key);
             entry.Value.gameObject.SetActive(supported);
             bool canAttack = state != null && supported && MatchRules.CanAttack(
                 state, state.GetCellOwner(attacker.X, attacker.Y), attacker.Id, entry.Key);

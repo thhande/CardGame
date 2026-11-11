@@ -805,6 +805,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   boardManager: {fileID: 1553811753}
   playerTestDeck:
+  - {fileID: 11400000, guid: e0e7dac27cfa4970aad86239901203d6, type: 2}
+  - {fileID: 11400000, guid: eae340a3bf1447219135e6c8a3ad0989, type: 2}
+  - {fileID: 11400000, guid: fa2d94b7dbc441c9afcba574221214e4, type: 2}
+  - {fileID: 11400000, guid: 163a00f0eb8644fe8964f5d73a1709ea, type: 2}
   - {fileID: 11400000, guid: da22028f28814effba7f740248dfdb47, type: 2}
   - {fileID: 11400000, guid: da22028f28814effba7f740248dfdb47, type: 2}
   - {fileID: 11400000, guid: c93855d4c3584e419f92bc40338ebaa4, type: 2}
@@ -815,9 +819,12 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 0934ed46de3712d43a9bbcf55923bfca, type: 2}
   - {fileID: 11400000, guid: 6a3848b627cc4dcaa5a81fb198a37cc5, type: 2}
   - {fileID: 11400000, guid: 6a3848b627cc4dcaa5a81fb198a37cc5, type: 2}
+  - {fileID: 11400000, guid: 13390526cd27e1c4cab61449cfd2b9fb, type: 2}
   - {fileID: 11400000, guid: c93855d4c3584e419f92bc40338ebaa4, type: 2}
-  - {fileID: 11400000, guid: 8f9b6fa86cd74864902dca9db485117a, type: 2}
   enemyTestDeck:
+  - {fileID: 11400000, guid: e0e7dac27cfa4970aad86239901203d6, type: 2}
+  - {fileID: 11400000, guid: fa2d94b7dbc441c9afcba574221214e4, type: 2}
+  - {fileID: 11400000, guid: 163a00f0eb8644fe8964f5d73a1709ea, type: 2}
   - {fileID: 11400000, guid: da22028f28814effba7f740248dfdb47, type: 2}
   - {fileID: 11400000, guid: da22028f28814effba7f740248dfdb47, type: 2}
   - {fileID: 11400000, guid: c93855d4c3584e419f92bc40338ebaa4, type: 2}
@@ -829,6 +836,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 8f9b6fa86cd74864902dca9db485117a, type: 2}
   - {fileID: 11400000, guid: c93855d4c3584e419f92bc40338ebaa4, type: 2}
   - {fileID: 11400000, guid: ef56f0b1163f7454280341a66aa4543c, type: 2}
+  - {fileID: 11400000, guid: 31eed8dcc5c94f82ab9138f80c1cf346, type: 2}
   - {fileID: 11400000, guid: 31eed8dcc5c94f82ab9138f80c1cf346, type: 2}
   handUI: {fileID: 1546152281}
 --- !u!1001 &1729805464
