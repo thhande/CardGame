@@ -72,11 +72,14 @@ public class HandUI : MonoBehaviour
             ? playerCells == enemyCells ? "Draw" : playerCells > enemyCells ? "Victory" : "Defeat"
             : playerTurn ? "Your turn" : "Opponent's turn";
         turnLabel.color = gameOver ? Brass : playerTurn ? Teal : Copper;
-        promptLabel.text = gameOver ? "The board is full"
+        promptLabel.text = gameOver ? (MatchRules.IsBoardFull(state) ? "The board is full" : "Both sides ran out of cards")
             : !playerTurn ? "Waiting for your opponent"
+            : matchManager.SelectedHandCard?.Definition.Type == CardType.Equip ? "Choose a friendly monster"
+            : matchManager.SelectedHandCard?.Definition.SupportEffect is ICellTargetedSupportEffect targetedEffect
+                ? targetedEffect.TargetPrompt
             : matchManager.SelectedHandCard != null ? "Choose an empty tile"
             : matchManager.NormalSummonThisTurn > 0 ? "Choose a card from your hand"
-            : "Attack, play a support, or end your turn";
+            : "Attack, play a card, or end your turn";
 
         playerDeckLabel.text = $"<color=#70E2CC>YOU</color>   {playerCells} tiles  /  {matchManager.PlayerDeck.Count} in deck";
         enemyDeckLabel.text = $"<color=#FF9B6F>OPPONENT</color>   {enemyCells} tiles  /  {matchManager.EnemyDeck.Count} in deck";
@@ -117,7 +120,9 @@ public class HandUI : MonoBehaviour
             HandCardView view = handCards.Find(candidate => candidate.Card == card);
             if (view == null)
             {
-                HandCardView prefab = card.Definition.IsSupportCard ? supportCardPrefab : monsterCardPrefab;
+                CardDefinition definition = card.Definition;
+                HandCardView prefab = definition.IsSupportCard || definition.Type == CardType.Equip
+                    ? supportCardPrefab : monsterCardPrefab;
                 view = Instantiate(prefab, handContent, false);
                 handCards.Add(view);
             }

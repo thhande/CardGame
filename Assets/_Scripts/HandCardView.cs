@@ -40,13 +40,15 @@ internal sealed class HandCardView : MonoBehaviour
         button.interactable = manager.CurrentState == TurnState.PlayerTurn
             && (isSupport
                 ? MatchRules.CanPlaySupportCard(manager.State, PlayerSide.Player, card.Id)
-                : manager.NormalSummonThisTurn > 0);
+                : definition.Type == CardType.Equip || manager.NormalSummonThisTurn > 0);
 
         SetPortrait(artwork, manager.GetArtwork(definition));
         title.text = definition.Name;
         details.text = isSupport
             ? $"<b>{(definition.Type == CardType.HiSupporter ? "HI SUPPORT" : "SUPPORT")}</b>\n{definition.SupportEffect?.Description ?? "Effect missing"}\n{definition.SupportCondition?.Description ?? "Condition missing"}"
-            : $"{definition.Attack} ATK   {definition.Defense} DEF   {card.CurrentHealth} HP";
+            : definition.Type == CardType.Equip
+                ? $"<b>EQUIP</b>\n{definition.EquipEffect?.Description}"
+                : $"{definition.Attack} ATK   {card.Defense} DEF   {card.CurrentHealth} HP";
     }
 
     private void OnClicked()

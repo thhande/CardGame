@@ -30,10 +30,29 @@ public sealed class PlaceCardAction : MatchAction
 public sealed class PlaySupportCardAction : MatchAction
 {
     public long CardId { get; }
+    public (int X, int Y)? TargetCell { get; }
 
     public PlaySupportCardAction(Guid matchId, PlayerSide actor, long cardId) : base(matchId, actor)
     {
         CardId = cardId;
+    }
+
+    public PlaySupportCardAction(Guid matchId, PlayerSide actor, long cardId, int x, int y)
+        : this(matchId, actor, cardId)
+    {
+        TargetCell = (x, y);
+    }
+}
+
+public sealed class PlayEquipCardAction : MatchAction
+{
+    public long CardId { get; }
+    public long TargetId { get; }
+
+    public PlayEquipCardAction(Guid matchId, PlayerSide actor, long cardId, long targetId) : base(matchId, actor)
+    {
+        CardId = cardId;
+        TargetId = targetId;
     }
 }
 
@@ -132,13 +151,14 @@ public static class MatchRules
         if (action is PlaySupportCardAction supportPlay)
             return TryApplySupportCard(state, supportPlay);
 
+        if (action is PlayEquipCardAction equipPlay)
+            return TryApplyEquipCard(state, equipPlay);
+
         if (action is ActivateMonsterEffectAction monsterEffect)
             return TryApplyMonsterEffect(state, monsterEffect);
 
         if (!(action is PlaceCardAction placement)) return false;
-        if (placement.X < 0 || placement.X >= MatchState.Width || placement.Y < 0 || placement.Y >= MatchState.Height)
-            return false;
-        if (state.GetCardAt(placement.X, placement.Y) != null) return false;
+        if (!CanPlaceAt(state, placement.X, placement.Y)) return false;
 
         List<CardInstance> hand;
         int summons;
@@ -180,21 +200,49 @@ public static class MatchRules
 
     public static bool CanPlaySupportCard(MatchState state, PlayerSide actor, long cardId)
     {
-        if (state == null
-            || (actor == PlayerSide.Player && state.Turn != TurnState.PlayerTurn)
-            || (actor == PlayerSide.Enemy && state.Turn != TurnState.EnemyTurn))
-            return false;
+        return CanPlaySupportCard(state, actor, cardId, out _);
+    }
 
-        List<CardInstance> hand = actor == PlayerSide.Player
-            ? state.MutablePlayerHand
-            : state.MutableEnemyHand;
-        CardInstance card = hand.Find(candidate => candidate.Id == cardId);
-        return card != null && IsSupportCardPlayable(state, actor, card);
+    internal static bool CanPlaySupportCard(MatchState state, PlayerSide actor, long cardId,
+        out (int X, int Y)? targetCell)
+    {
+        targetCell = null;
+        int handIndex = FindPlayableSupportCard(state, actor, cardId, out List<CardInstance> hand);
+        if (handIndex < 0) return false;
+        if (!(hand[handIndex].Definition.SupportEffect is ICellTargetedSupportEffect effect)) return true;
+
+        for (int y = 0; y < MatchState.Height; y++)
+        {
+            for (int x = 0; x < MatchState.Width; x++)
+            {
+                if (!effect.CanTargetCell(state, actor, x, y)) continue;
+                targetCell = (x, y);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static bool CanPlaceAt(MatchState state, int x, int y)
+    {
+        return state != null && IsOnBoard(x, y)
+            && state.GetCellState(x, y) == BoardCellState.Empty;
+    }
+
+    private static bool IsOnBoard(int x, int y)
+    {
+        return x >= 0 && x < MatchState.Width && y >= 0 && y < MatchState.Height;
     }
 
     public static bool CanAttack(MatchState state, PlayerSide actor, long attackerId, CardDirection direction)
     {
         return TryGetAttackTarget(state, actor, attackerId, direction, out _, out _);
+    }
+
+    public static bool CanPlayEquipCard(MatchState state, PlayerSide actor, long cardId, long targetId)
+    {
+        return FindEquipTarget(state, actor, cardId, targetId, out _) != null;
     }
 
     public static bool CanActivateMonsterEffect(MatchState state, PlayerSide actor, long cardId)
@@ -213,21 +261,39 @@ public static class MatchRules
 
     private static bool TryApplySupportCard(MatchState state, PlaySupportCardAction action)
     {
-        if (!CanPlaySupportCard(state, action.Actor, action.CardId)) return false;
-        List<CardInstance> hand = action.Actor == PlayerSide.Player
-            ? state.MutablePlayerHand
-            : state.MutableEnemyHand;
-        int handIndex = hand.FindIndex(card => card.Id == action.CardId);
-        CardInstance card = hand[handIndex];
-        CardDefinition definition = card.Definition;
+        int handIndex = FindPlayableSupportCard(state, action.Actor, action.CardId, out List<CardInstance> hand);
+        if (handIndex < 0) return false;
+
+        CardDefinition definition = hand[handIndex].Definition;
+        if (definition.SupportEffect is ICellTargetedSupportEffect effect)
+        {
+            if (!action.TargetCell.HasValue) return false;
+            (int x, int y) = action.TargetCell.Value;
+            if (!IsOnBoard(x, y) || !effect.CanTargetCell(state, action.Actor, x, y)) return false;
+        }
+        else if (action.TargetCell.HasValue) return false;
+
         hand.RemoveAt(handIndex);
         if (definition.Type == CardType.HiSupporter) state.CurrentTurn.HasPlayedHiSupporter = true;
         SupportEffectContext context = new SupportEffectContext(
-            action.Actor, state.TurnHistory,
+            action.Actor, state.TurnHistory, action.TargetCell,
             operation => operation.Apply(state, action.Actor));
         definition.SupportEffect.Resolve(context);
         if (BothRanOutOfCard(state)) state.Turn = TurnState.GameOver;
         return true;
+    }
+
+    private static int FindPlayableSupportCard(MatchState state, PlayerSide actor, long cardId,
+        out List<CardInstance> hand)
+    {
+        hand = null;
+        if (state == null || (actor != PlayerSide.Player && actor != PlayerSide.Enemy)
+            || state.Turn != (actor == PlayerSide.Player ? TurnState.PlayerTurn : TurnState.EnemyTurn))
+            return -1;
+
+        hand = actor == PlayerSide.Player ? state.MutablePlayerHand : state.MutableEnemyHand;
+        int index = hand.FindIndex(card => card.Id == cardId);
+        return index >= 0 && IsSupportCardPlayable(state, actor, hand[index]) ? index : -1;
     }
 
     private static bool IsSupportCardPlayable(MatchState state, PlayerSide actor, CardInstance card)
@@ -239,6 +305,36 @@ public static class MatchRules
         if (definition.Type == CardType.HiSupporter && state.CurrentTurn.HasPlayedHiSupporter)
             return false;
         return definition.SupportCondition.IsMet(state, actor);
+    }
+
+    private static bool TryApplyEquipCard(MatchState state, PlayEquipCardAction action)
+    {
+        CardInstance target = FindEquipTarget(state, action.Actor, action.CardId, action.TargetId, out int handIndex);
+        if (target == null) return false;
+
+        List<CardInstance> hand = action.Actor == PlayerSide.Player ? state.MutablePlayerHand : state.MutableEnemyHand;
+        state.AttachEquipment(target, hand[handIndex]);
+        hand.RemoveAt(handIndex);
+        if (BothRanOutOfCard(state)) state.Turn = TurnState.GameOver;
+        return true;
+    }
+
+    private static CardInstance FindEquipTarget(MatchState state, PlayerSide actor, long cardId, long targetId,
+        out int handIndex)
+    {
+        handIndex = -1;
+        if (state == null || (actor != PlayerSide.Player && actor != PlayerSide.Enemy)
+            || state.Turn != (actor == PlayerSide.Player ? TurnState.PlayerTurn : TurnState.EnemyTurn))
+            return null;
+
+        List<CardInstance> hand = actor == PlayerSide.Player ? state.MutablePlayerHand : state.MutableEnemyHand;
+        handIndex = hand.FindIndex(card => card.Id == cardId && card.Owner == actor
+            && card.Definition.Type == CardType.Equip && card.Definition.EquipEffect != null);
+        if (handIndex < 0) return null;
+
+        CardInstance target = FindBoardCard(state, targetId);
+        return target != null && target.Definition.Type == CardType.Monster && target.CurrentHealth > 0
+            && state.GetCellOwner(target.X, target.Y) == actor ? target : null;
     }
 
     private static bool TryApplyMonsterEffect(MatchState state, ActivateMonsterEffectAction action)
@@ -267,9 +363,13 @@ public static class MatchRules
         if (card == null || card.Owner != actor || card.Definition.Type != CardType.Monster)
             return null;
 
+        MonsterEffectContext context = null;
         foreach (MonsterEffectEntry entry in card.Definition.MonsterEffects)
         {
             if (entry == null || entry.ActivateType != MonsterEffectType.ChooseToTrigger) continue;
+            context ??= new MonsterEffectContext(actor, card, state.TurnHistory);
+            if (!entry.Effect.ActiveCondition(context)) continue;
+
             effect = entry.Effect;
             return card;
         }
@@ -310,15 +410,23 @@ public static class MatchRules
         int targetX = target.X;
         int targetY = target.Y;
         attacker.RemainAttacks -= 1;
-        target.CurrentHealth = Math.Max(0, target.CurrentHealth - attacker.Definition.Attack);
-        if (HasDirection(target.Definition.AttackDirections,
+        target.TakeDamage(attacker.Definition.Attack);
+        if (HasDirection(target.AttackDirections,
                 new CardDirection(-action.Direction.X, -action.Direction.Y)))
         {
-            attacker.CurrentHealth = Math.Max(0, attacker.CurrentHealth - target.Definition.Defense);
+            attacker.TakeDamage(target.Defense);
         }
 
-        if (target.CurrentHealth <= 0) state.SwitchCellOwner(targetX, targetY);
-        if (attacker.CurrentHealth <= 0) state.SwitchCellOwner(attackerX, attackerY);
+        if (target.CurrentHealth <= 0)
+        {
+            target.ClearEquipment();
+            state.SwitchCellOwner(targetX, targetY);
+        }
+        if (attacker.CurrentHealth <= 0)
+        {
+            attacker.ClearEquipment();
+            state.SwitchCellOwner(attackerX, attackerY);
+        }
         return true;
     }
 
@@ -331,8 +439,7 @@ public static class MatchRules
             || (actor == PlayerSide.Player && state.Turn != TurnState.PlayerTurn)
             || (actor == PlayerSide.Enemy && state.Turn != TurnState.EnemyTurn))
             return false;
-        if (direction.X < -1 || direction.X > 1 || direction.Y < -1 || direction.Y > 1
-            || (direction.X == 0 && direction.Y == 0)) return false;
+        if (!direction.IsAttackDirection) return false;
 
         for (int y = 0; y < MatchState.Height; y++)
         {
@@ -352,7 +459,7 @@ public static class MatchRules
             || attacker.Definition.Type != CardType.Monster
             || attacker.RemainAttacks <= 0) return false;
         if (attacker.CurrentHealth <= 0) return false;
-        if (!HasDirection(attacker.Definition.AttackDirections, direction)) return false;
+        if (!HasDirection(attacker.AttackDirections, direction)) return false;
 
         int targetX = attacker.X + direction.X;
         int targetY = attacker.Y + direction.Y;
@@ -392,7 +499,7 @@ public static class MatchRules
         {
             for (int x = 0; x < MatchState.Width; x++)
             {
-                if (state.GetCardAt(x, y) == null) return false;
+                if (state.GetCellState(x, y) != BoardCellState.Occupied) return false;
             }
         }
         return true;

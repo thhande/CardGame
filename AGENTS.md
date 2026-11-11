@@ -13,7 +13,14 @@
 -   Do not invent requirements. If an important requirement is ambiguous
     and cannot be safely inferred from the codebase, ask for
     clarification.
-
+- Follow existing project architecture.
+- Do not introduce new abstractions unless necessary.
+- Prefer extending existing systems.
+- Add null checks where appropriate.
+- Keep methods small and readable.
+- Avoid unnecessary allocations in Update().
+- Do not modify unrelated systems.
+- Never silently swallow exceptions.
 ## 2. Understand the Project Before Changing It
 
 Before editing code:

@@ -117,16 +117,23 @@ public class MatchManager : Singleton<MatchManager>
 
     public void SelectHandCard(CardInstance card)
     {
-        if (CurrentState != TurnState.PlayerTurn || NormalSummonThisTurn <= 0) return;
-        if (card == null || card.Definition.Type != CardType.Monster || !IsInPlayerHand(card)) return;
+        if (CurrentState != TurnState.PlayerTurn || card == null || !IsInPlayerHand(card)) return;
+        CardType type = card.Definition.Type;
+        if (type != CardType.Equip && (type != CardType.Monster || NormalSummonThisTurn <= 0)) return;
 
-        selectedCard = card;
+        selectedCard = type == CardType.Equip && selectedCard == card ? null : card;
         RefreshUI();
     }
 
     public void OnBoardSlotClicked(BoardSlot slot)
     {
         if (slot == null || CurrentState != TurnState.PlayerTurn) return;
+        if (selectedCard?.Definition.Type == CardType.Equip
+            || selectedCard?.Definition.SupportEffect is ICellTargetedSupportEffect)
+        {
+            TryPlaceCardOnBoard(slot);
+            return;
+        }
 
         CardInstance boardCard = slot.placedCard;
         if (boardCard != null)
@@ -153,8 +160,21 @@ public class MatchManager : Singleton<MatchManager>
     public void TryPlaceCardOnBoard(BoardSlot targetSlot)
     {
         if (CurrentState != TurnState.PlayerTurn || targetSlot == null || selectedCard == null) return;
-        MatchAction action = new PlaceCardAction(matchState.Id, PlayerSide.Player, selectedCard.Id, targetSlot.x, targetSlot.y);
-        SubmitAction(action);
+        if (selectedCard.Definition.SupportEffect is ICellTargetedSupportEffect)
+        {
+            SubmitAction(new PlaySupportCardAction(matchState.Id, PlayerSide.Player, selectedCard.Id,
+                targetSlot.x, targetSlot.y));
+            return;
+        }
+
+        if (selectedCard.Definition.Type == CardType.Equip)
+        {
+            if (targetSlot.placedCard != null)
+                SubmitAction(new PlayEquipCardAction(matchState.Id, PlayerSide.Player, selectedCard.Id, targetSlot.placedCard.Id));
+            return;
+        }
+
+        SubmitAction(new PlaceCardAction(matchState.Id, PlayerSide.Player, selectedCard.Id, targetSlot.x, targetSlot.y));
     }
 
     public void TryActivateMonsterEffect(BoardSlot sourceSlot)
@@ -168,6 +188,14 @@ public class MatchManager : Singleton<MatchManager>
     {
         if (CurrentState != TurnState.PlayerTurn || card == null
             || !card.Definition.IsSupportCard || !IsInPlayerHand(card)) return;
+
+        if (card.Definition.SupportEffect is ICellTargetedSupportEffect)
+        {
+            if (!MatchRules.CanPlaySupportCard(matchState, PlayerSide.Player, card.Id)) return;
+            selectedCard = selectedCard == card ? null : card;
+            RefreshUI();
+            return;
+        }
 
         SubmitAction(new PlaySupportCardAction(matchState.Id, PlayerSide.Player, card.Id));
     }
@@ -190,8 +218,14 @@ public class MatchManager : Singleton<MatchManager>
         }
         else if (action is PlaySupportCardAction supportPlay)
         {
+            if (supportPlay.Actor == PlayerSide.Player && selectedCard?.Definition.IsSupportCard == true)
+                selectedCard = null;
             string actor = supportPlay.Actor == PlayerSide.Player ? "Player" : "Enemy";
             Debug.Log($"{actor} played a support card.");
+        }
+        else if (action is PlayEquipCardAction equipPlay)
+        {
+            if (equipPlay.Actor == PlayerSide.Player) selectedCard = null;
         }
         else if (action is ActivateMonsterEffectAction monsterEffect)
         {
