@@ -382,6 +382,8 @@ public sealed class MatchState
     private readonly List<CardInstance> playerHand = new List<CardInstance>();
     private readonly List<CardInstance> enemyDeck = new List<CardInstance>();
     private readonly List<CardInstance> enemyHand = new List<CardInstance>();
+    private readonly List<CardInstance> playerDiscardPile = new List<CardInstance>();
+    private readonly List<CardInstance> enemyDiscardPile = new List<CardInstance>();
     private readonly BoardCell[,] board = new BoardCell[Width, Height];
     private readonly List<MatchTurn> turnHistory = new List<MatchTurn>();
 
@@ -402,6 +404,8 @@ public sealed class MatchState
     public IReadOnlyList<CardInstance> PlayerHand => playerHand;
     public IReadOnlyList<CardInstance> EnemyDeck => enemyDeck;
     public IReadOnlyList<CardInstance> EnemyHand => enemyHand;
+    public IReadOnlyList<CardInstance> PlayerDiscardPile { get; }
+    public IReadOnlyList<CardInstance> EnemyDiscardPile { get; }
 
     internal List<CardInstance> MutablePlayerDeck => playerDeck;
     internal List<CardInstance> MutablePlayerHand => playerHand;
@@ -482,11 +486,24 @@ public sealed class MatchState
         ref BoardCell cell = ref GetCell(x, y);
         CardInstance card = cell.Card;
         if (card == null) return;
-        card.ClearEquipment();
+        DiscardEquipment(card);
         card.X = -1;
         card.Y = -1;
         cell.Card = null;
         cell.Owner = default(PlayerSide);
+    }
+
+    internal void DiscardCard(CardInstance card)
+    {
+        List<CardInstance> pile = card.Owner == PlayerSide.Player ? playerDiscardPile : enemyDiscardPile;
+        pile.Add(card);
+    }
+
+    internal void DiscardEquipment(CardInstance card)
+    {
+        foreach (CardInstance equipment in card.Equipment)
+            DiscardCard(equipment);
+        card.ClearEquipment();
     }
 
     internal void ReturnBoardCardToDeck(CardInstance card, PlayerSide owner)
@@ -526,6 +543,8 @@ public sealed class MatchState
         Id = Guid.NewGuid();
         Turn = TurnState.StartGame;
         TurnHistory = turnHistory.AsReadOnly();
+        PlayerDiscardPile = playerDiscardPile.AsReadOnly();
+        EnemyDiscardPile = enemyDiscardPile.AsReadOnly();
         random = new System.Random(seed);
     }
 }

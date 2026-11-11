@@ -124,7 +124,7 @@ public static class MatchRules
         if (!TryApplyAction(state, action)) return false;
 
         turn.RecordAction(action);
-        if (action is EndTurnAction || state.Turn == TurnState.GameOver) turn.IsComplete = true;
+        if (action is EndTurnAction) turn.IsComplete = true;
         return true;
     }
 
@@ -132,17 +132,12 @@ public static class MatchRules
     {
         if (action is EndTurnAction endTurn)
         {
-            if (endTurn.Actor == PlayerSide.Player && state.Turn == TurnState.PlayerTurn)
-            {
-                StartEnemyTurn(state);
-                return true;
-            }
-            if (endTurn.Actor == PlayerSide.Enemy && state.Turn == TurnState.EnemyTurn)
-            {
-                BeginPlayerTurn(state, true);
-                return true;
-            }
-            return false;
+            if (endTurn.Actor != state.CurrentTurn.Actor) return false;
+
+            if (IsBoardFull(state) || BothRanOutOfCard(state)) state.Turn = TurnState.GameOver;
+            else if (endTurn.Actor == PlayerSide.Player) StartEnemyTurn(state);
+            else BeginPlayerTurn(state, true);
+            return true;
         }
 
         if (action is AttackCardAction attack)
@@ -188,7 +183,6 @@ public static class MatchRules
         if (placement.Actor == PlayerSide.Player) state.PlayerSummonsRemaining--;
         else state.EnemySummonsRemaining--;
 
-        if (IsBoardFull(state) || BothRanOutOfCard(state)) state.Turn = TurnState.GameOver;
         return true;
     }
 
@@ -264,7 +258,8 @@ public static class MatchRules
         int handIndex = FindPlayableSupportCard(state, action.Actor, action.CardId, out List<CardInstance> hand);
         if (handIndex < 0) return false;
 
-        CardDefinition definition = hand[handIndex].Definition;
+        CardInstance card = hand[handIndex];
+        CardDefinition definition = card.Definition;
         if (definition.SupportEffect is ICellTargetedSupportEffect effect)
         {
             if (!action.TargetCell.HasValue) return false;
@@ -274,12 +269,12 @@ public static class MatchRules
         else if (action.TargetCell.HasValue) return false;
 
         hand.RemoveAt(handIndex);
+        state.DiscardCard(card);
         if (definition.Type == CardType.HiSupporter) state.CurrentTurn.HasPlayedHiSupporter = true;
         SupportEffectContext context = new SupportEffectContext(
             action.Actor, state.TurnHistory, action.TargetCell,
             operation => operation.Apply(state, action.Actor));
         definition.SupportEffect.Resolve(context);
-        if (BothRanOutOfCard(state)) state.Turn = TurnState.GameOver;
         return true;
     }
 
@@ -315,7 +310,6 @@ public static class MatchRules
         List<CardInstance> hand = action.Actor == PlayerSide.Player ? state.MutablePlayerHand : state.MutableEnemyHand;
         state.AttachEquipment(target, hand[handIndex]);
         hand.RemoveAt(handIndex);
-        if (BothRanOutOfCard(state)) state.Turn = TurnState.GameOver;
         return true;
     }
 
@@ -346,7 +340,6 @@ public static class MatchRules
             action.Actor, card, state.TurnHistory,
             operation => operation.Apply(state, action.Actor, card));
         effect.Resolve(context);
-        if (BothRanOutOfCard(state)) state.Turn = TurnState.GameOver;
         return true;
     }
 
@@ -419,12 +412,12 @@ public static class MatchRules
 
         if (target.CurrentHealth <= 0)
         {
-            target.ClearEquipment();
+            state.DiscardEquipment(target);
             state.SwitchCellOwner(targetX, targetY);
         }
         if (attacker.CurrentHealth <= 0)
         {
-            attacker.ClearEquipment();
+            state.DiscardEquipment(attacker);
             state.SwitchCellOwner(attackerX, attackerY);
         }
         return true;

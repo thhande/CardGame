@@ -237,10 +237,10 @@ public class MatchManager : Singleton<MatchManager>
             string actor = attack.Actor == PlayerSide.Player ? "Player" : "Enemy";
             Debug.Log($"{actor} attacked in direction ({attack.Direction.X}, {attack.Direction.Y}).");
         }
-        else if (action is EndTurnAction endTurn)
+        else if (action is EndTurnAction)
         {
             selectedCard = null;
-            if (endTurn.Actor == PlayerSide.Player) StartCoroutine(EnemyTurnRoutine());
+            if (CurrentState == TurnState.EnemyTurn) StartCoroutine(EnemyTurnRoutine());
         }
 
         SyncBoard();
@@ -289,12 +289,7 @@ public class MatchManager : Singleton<MatchManager>
             }
         }
 
-        if (matchState != activeState) yield break;
-        if (activeState.Turn == TurnState.GameOver || MatchRules.IsBoardFull(activeState))
-        {
-            if (activeState.Turn != TurnState.GameOver) SetGameOver();
-            yield break;
-        }
+        if (matchState != activeState || activeState.Turn == TurnState.GameOver) yield break;
 
         selectedCard = null;
         RefreshUI();
