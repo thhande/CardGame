@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b9290d4f638d431e88c026d98defc723, type: 3}
+  m_Name: DrawTwo
+  m_EditorClassIdentifier: 
+  <CardName>k__BackingField: Draw Two
+  <CardDescription>k__BackingField: Draw 2 cards.
+  <Artwork>k__BackingField: {fileID: 21300012, guid: 6003213c651c481393f2e34a5d74f218, type: 3}
+  <Effect>k__BackingField: {fileID: 11400000, guid: fcddfd461c35433f81f6e2939d254eb2, type: 2}
+  <ActiveCondition>k__BackingField: {fileID: 11400000, guid: 0d459aae096845ada7019edd14cd4d05, type: 2}
+  isHiSupporter: 1

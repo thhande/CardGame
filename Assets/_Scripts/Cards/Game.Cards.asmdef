@@ -1,0 +1,6 @@
+{
+  "name": "Game.Cards",
+  "references": [
+    "Game.Core"
+  ]
+}

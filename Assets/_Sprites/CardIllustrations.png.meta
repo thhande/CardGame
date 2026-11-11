@@ -1,0 +1,212 @@
+fileFormatVersion: 2
+guid: 6003213c651c481393f2e34a5d74f218
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 21300000
+    second: Archer
+  - first:
+      213: 21300002
+    second: Wolf
+  - first:
+      213: 21300004
+    second: Ogre
+  - first:
+      213: 21300006
+    second: Goblin
+  - first:
+      213: 21300008
+    second: CardGunner
+  - first:
+      213: 21300010
+    second: SampleCard
+  - first:
+      213: 21300012
+    second: DrawTwo
+  externalObjects: {}
+  serializedVersion: 12
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  maxTextureSize: 2048
+  spriteMode: 2
+  spriteMeshType: 1
+  spritePixelsToUnits: 100
+  alphaIsTransparency: 1
+  textureType: 8
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: Archer
+      rect:
+        serializedVersion: 2
+        x: 3
+        y: 447
+        width: 437
+        height: 437
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 952a24daf70b4ba08bed7a2c985d7eb5
+      internalID: 21300000
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Wolf
+      rect:
+        serializedVersion: 2
+        x: 446
+        y: 447
+        width: 438
+        height: 437
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 2dd35fbbe868479dbd74380047835e08
+      internalID: 21300002
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Ogre
+      rect:
+        serializedVersion: 2
+        x: 890
+        y: 447
+        width: 437
+        height: 437
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 619b665130184d57b38cb52549305978
+      internalID: 21300004
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Goblin
+      rect:
+        serializedVersion: 2
+        x: 1333
+        y: 447
+        width: 438
+        height: 437
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 426ffbb2e100405f83ed7bd314a92ddf
+      internalID: 21300006
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: CardGunner
+      rect:
+        serializedVersion: 2
+        x: 3
+        y: 3
+        width: 437
+        height: 438
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 61d3c65a2061466d8840218c7524414d
+      internalID: 21300008
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: SampleCard
+      rect:
+        serializedVersion: 2
+        x: 446
+        y: 3
+        width: 438
+        height: 438
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 0d25da28d2b14e8c8b1497ad83d4ed96
+      internalID: 21300010
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: DrawTwo
+      rect:
+        serializedVersion: 2
+        x: 890
+        y: 3
+        width: 437
+        height: 438
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: 0
+      bones: []
+      spriteID: 06d970e379fc48fe9ed20779871246e5
+      internalID: 21300012
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    physicsShape: []
+    bones: []
+    spriteID: 
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    nameFileIdTable:
+      Archer: 21300000
+      Wolf: 21300002
+      Ogre: 21300004
+      Goblin: 21300006
+      CardGunner: 21300008
+      SampleCard: 21300010
+      DrawTwo: 21300012

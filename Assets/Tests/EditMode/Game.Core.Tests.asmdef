@@ -1,0 +1,14 @@
+{
+  "name": "Game.Core.Tests",
+  "references": [
+    "Game.Core",
+    "Game.Cards",
+    "UnityEngine.UI"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}
