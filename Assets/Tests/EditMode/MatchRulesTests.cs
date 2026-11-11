@@ -67,8 +67,11 @@ public class MatchRulesTests
         Assert.AreEqual(CardType.HiSupporter, definition.Type);
         MatchState state = MatchRules.CreateMatch(Enumerable.Repeat(definition, 4).ToList(), 4, 1, 42);
 
+        CardInstance firstCard = state.PlayerHand[0];
         Assert.IsTrue(MatchRules.TryApply(state,
-            new PlaySupportCardAction(state.Id, PlayerSide.Player, state.PlayerHand[0].Id)));
+            new PlaySupportCardAction(state.Id, PlayerSide.Player, firstCard.Id)));
+        Assert.AreSame(firstCard, state.PlayerDiscardPile.Single());
+        Assert.IsEmpty(state.EnemyDiscardPile);
         Assert.AreEqual(2, state.PlayerHand.Count);
         Assert.AreEqual(1, state.PlayerSummonsRemaining);
         long secondCardId = state.PlayerHand[0].Id;
@@ -76,6 +79,7 @@ public class MatchRulesTests
         Assert.IsFalse(MatchRules.CanPlaySupportCard(state, PlayerSide.Player, secondCardId));
         Assert.IsFalse(MatchRules.TryApply(state, secondPlay));
         Assert.AreEqual(2, state.PlayerHand.Count);
+        Assert.AreEqual(1, state.PlayerDiscardPile.Count);
 
         Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Player)));
         var enemy = new RandomPlayerAgent(42);
@@ -83,6 +87,7 @@ public class MatchRulesTests
         enemy.RequestAction(state, action => enemyAction = action);
         Assert.IsInstanceOf<PlaySupportCardAction>(enemyAction);
         Assert.IsTrue(MatchRules.TryApply(state, enemyAction));
+        Assert.AreEqual(PlayerSide.Enemy, state.EnemyDiscardPile.Single().Owner);
         Assert.IsFalse(MatchRules.TryApply(state,
             new PlaySupportCardAction(state.Id, PlayerSide.Enemy, state.EnemyHand[0].Id)));
         enemy.RequestAction(state, action => enemyAction = action);
@@ -91,6 +96,8 @@ public class MatchRulesTests
 
         Assert.IsTrue(MatchRules.CanPlaySupportCard(state, PlayerSide.Player, secondCardId));
         Assert.IsTrue(MatchRules.TryApply(state, secondPlay));
+        CollectionAssert.AreEqual(new[] { firstCard.Id, secondCardId },
+            state.PlayerDiscardPile.Select(discard => discard.Id));
     }
 
     [Test]
@@ -401,11 +408,37 @@ public class MatchRulesTests
         Assert.IsTrue(MatchRules.TryApply(state, new ActivateMonsterEffectAction(state.Id, PlayerSide.Player, gunner.Id)));
 
         Assert.AreSame(gunner, state.PlayerHand.Single());
+        Assert.AreSame(equipment, state.PlayerDiscardPile.Single());
         Assert.IsEmpty(gunner.Equipment);
         Assert.AreEqual(monster.Defense, gunner.Defense);
         Assert.AreEqual(monster.Health, gunner.MaxHealth);
         Assert.AreEqual(monster.Health, gunner.CurrentHealth);
         CollectionAssert.AreEqual(monster.AttackDirections, gunner.AttackDirections);
+    }
+
+    [Test]
+    public void Defeat_DiscardsEquipmentButKeepsMonsterOnTheBoard()
+    {
+        var attacker = new CardDefinition("attacker", "Attacker", 8, 0, 4, CardType.Monster, new CardDirection(1, 0));
+        var armor = new CardDefinition("armor", "Armor", new EquipEffect(1, 1, false, "Armor"));
+        MatchState state = MatchRules.CreateMatch(new List<CardDefinition> { attacker, attacker },
+            new List<CardDefinition> { testCard, armor }, 2, 2, 42);
+        CardInstance player = state.PlayerHand[0];
+        CardInstance enemy = state.EnemyHand.Single(card => card.Definition == testCard);
+        CardInstance equipment = state.EnemyHand.Single(card => card.Definition == armor);
+
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Player, player.Id, 1, 1)));
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Player)));
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Enemy, enemy.Id, 2, 1)));
+        Assert.IsTrue(MatchRules.TryApply(state, new PlayEquipCardAction(state.Id, PlayerSide.Enemy, equipment.Id, enemy.Id)));
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Enemy)));
+        Assert.IsTrue(MatchRules.TryApply(state, new AttackCardAction(state.Id, PlayerSide.Player, player.Id, 1, 0)));
+
+        Assert.AreSame(enemy, state.GetCardAt(2, 1));
+        Assert.AreEqual(PlayerSide.Player, state.GetCellOwner(2, 1));
+        Assert.IsEmpty(enemy.Equipment);
+        Assert.IsEmpty(state.PlayerDiscardPile);
+        Assert.AreSame(equipment, state.EnemyDiscardPile.Single());
     }
 
     [Test]
@@ -445,14 +478,19 @@ public class MatchRulesTests
             new PlaceCardAction(state.Id, PlayerSide.Player, state.PlayerHand[0].Id, 0, 0)));
         Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Player)));
         var finalPlacement = new PlaceCardAction(state.Id, PlayerSide.Enemy, state.EnemyHand[0].Id, 1, 0);
+        var finalEndTurn = new EndTurnAction(state.Id, PlayerSide.Enemy);
 
         Assert.IsTrue(MatchRules.TryApply(state, finalPlacement));
+        Assert.IsTrue(MatchRules.BothRanOutOfCard(state));
+        Assert.AreEqual(TurnState.EnemyTurn, state.Turn);
+        Assert.IsFalse(state.TurnHistory[1].IsComplete);
+        Assert.IsTrue(MatchRules.TryApply(state, finalEndTurn));
 
         Assert.AreEqual(TurnState.GameOver, state.Turn);
         Assert.AreEqual(2, state.TurnNumber);
         Assert.AreEqual(2, state.CompletedTurnCount);
         Assert.IsTrue(state.TurnHistory[1].IsComplete);
-        CollectionAssert.AreEqual(new MatchAction[] { finalPlacement }, state.TurnHistory[1].Actions);
+        CollectionAssert.AreEqual(new MatchAction[] { finalPlacement, finalEndTurn }, state.TurnHistory[1].Actions);
     }
 
     [Test]
@@ -709,13 +747,18 @@ public class MatchRulesTests
             {
                 "handContent", "titleRect", "playerPanel", "enemyPanel", "tray", "viewportRect", "divider",
                 "turnLabel", "promptLabel", "playerDeckLabel", "enemyDeckLabel", "handLabel", "endTurnLabel",
-                "endTurnButton", "cardPreview"
+                "endTurnButton", "cardPreview", "handContentWidth", "opponentHand", "opponentCardBackPrefab",
+                "handScroll", "discardContents", "playerDiscardButton", "enemyDiscardButton"
             })
                 Assert.IsNotNull(view.FindProperty(field).objectReferenceValue, field);
 
             var content = (RectTransform)view.FindProperty("handContent").objectReferenceValue;
             Assert.AreEqual(0, content.childCount);
             Assert.AreSame(content, content.GetComponentInParent<ScrollRect>().content);
+            var discard = (Component)view.FindProperty("discardContents").objectReferenceValue;
+            Assert.AreSame(content.parent, discard.transform.parent);
+            Assert.IsFalse(discard.gameObject.activeSelf);
+            Assert.AreSame(content, ((LayoutElement)view.FindProperty("handContentWidth").objectReferenceValue).transform);
             var preview = (Component)view.FindProperty("cardPreview").objectReferenceValue;
             Assert.IsFalse(preview.gameObject.activeSelf);
             Assert.AreSame(hud.transform.parent, preview.transform.parent);
@@ -726,6 +769,7 @@ public class MatchRulesTests
                 var card = (Component)view.FindProperty(field).objectReferenceValue;
                 Assert.IsNotNull(card, field);
                 Assert.IsTrue(PrefabUtility.IsPartOfPrefabAsset(card));
+                Assert.Greater(card.GetComponent<LayoutElement>().preferredWidth, 166);
                 var cardView = new SerializedObject(card);
                 foreach (string reference in new[] { "frame", "surface", "artwork", "title", "details", "button", "holdPreview" })
                     Assert.IsNotNull(cardView.FindProperty(reference).objectReferenceValue, reference);
@@ -734,6 +778,42 @@ public class MatchRulesTests
         finally
         {
             if (openedForTest) EditorSceneManager.CloseScene(scene, true);
+        }
+    }
+
+    [Test]
+    public void OpponentHand_ShowsOneNonInteractiveBackPerCardAndReusesIt()
+    {
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Prefabs/MatchHUD.prefab");
+        GameObject instance = Object.Instantiate(prefab);
+        try
+        {
+            Component hud = instance.GetComponent("HandUI");
+            var view = new SerializedObject(hud);
+            var row = (RectTransform)view.FindProperty("opponentHand").objectReferenceValue;
+            var back = (RectTransform)view.FindProperty("opponentCardBackPrefab").objectReferenceValue;
+            Assert.IsTrue(PrefabUtility.IsPartOfPrefabAsset(back));
+            Assert.IsTrue(back.GetComponentsInChildren<MonoBehaviour>()
+                .All(component => component is Image || component is LayoutElement));
+            Assert.IsTrue(back.GetComponentsInChildren<Graphic>().All(graphic => !graphic.raycastTarget));
+            var refresh = hud.GetType().GetMethod("RefreshOpponentHand",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+            refresh.Invoke(hud, new object[] { 5 });
+            Assert.AreEqual(5, row.Cast<Transform>().Count(card => card.gameObject.activeSelf));
+            Transform fifthBack = row.GetChild(4);
+
+            refresh.Invoke(hud, new object[] { 0 });
+            Assert.IsFalse(row.Cast<Transform>().Any(card => card.gameObject.activeSelf));
+
+            refresh.Invoke(hud, new object[] { 5 });
+            Assert.AreEqual(5, row.Cast<Transform>().Count(card => card.gameObject.activeSelf));
+            Assert.AreSame(fifthBack, row.GetChild(4));
+            Assert.AreEqual(5, row.childCount);
+        }
+        finally
+        {
+            Object.DestroyImmediate(instance);
         }
     }
 
@@ -874,24 +954,52 @@ public class MatchRulesTests
         Assert.AreEqual(1, state.PlayerHand.Count);
     }
 
-    [Test]
-    public void PlacementOnLastCell_EndsMatch()
+    [TestCase(PlayerSide.Player)]
+    [TestCase(PlayerSide.Enemy)]
+    public void FullBoard_AllowsEquipAndAttackBeforeEndTurn(PlayerSide finalActor)
     {
-        MatchState state = MatchRules.CreateMatch(card, 16, 1, 42);
-        for (int i = 0; i < 15; i++)
+        var attacker = new CardDefinition("attacker", "Attacker", 4, 0, 3, CardType.Monster, new CardDirection(-1, 0));
+        var armor = new CardDefinition("armor", "Armor", new EquipEffect(1, 1, false, "Armor"));
+        int lastCell = MatchState.Width * MatchState.Height - 1;
+        var definitions = Enumerable.Repeat(testCard, lastCell).Concat(new[] { attacker, armor }).ToList();
+        MatchState state = MatchRules.CreateMatch(definitions, definitions.Count, definitions.Count, 42);
+        PlayerSide otherActor = finalActor == PlayerSide.Player ? PlayerSide.Enemy : PlayerSide.Player;
+        var otherHand = otherActor == PlayerSide.Player ? state.PlayerHand : state.EnemyHand;
+        var finalHand = finalActor == PlayerSide.Player ? state.PlayerHand : state.EnemyHand;
+        var otherEndTurn = new EndTurnAction(state.Id, otherActor);
+        var finalEndTurn = new EndTurnAction(state.Id, finalActor);
+
+        if (finalActor == PlayerSide.Player)
+            Assert.IsTrue(MatchRules.TryApply(state, finalEndTurn));
+        for (int i = 0; i < lastCell; i++)
         {
-            Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Player)));
+            CardInstance filler = otherHand.First(card => card.Definition == testCard);
             Assert.IsTrue(MatchRules.TryApply(state,
-                new PlaceCardAction(state.Id, PlayerSide.Enemy, state.EnemyHand[0].Id, i % MatchState.Width, i / MatchState.Width)));
-            Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Enemy)));
+                new PlaceCardAction(state.Id, otherActor, filler.Id, i % MatchState.Width, i / MatchState.Width)));
+            Assert.IsTrue(MatchRules.TryApply(state, otherEndTurn));
+            if (i < lastCell - 1) Assert.IsTrue(MatchRules.TryApply(state, finalEndTurn));
         }
 
-        bool applied = MatchRules.TryApply(state,
-            new PlaceCardAction(state.Id, PlayerSide.Player, state.PlayerHand[0].Id, 3, 3));
+        int x = MatchState.Width - 1;
+        int y = MatchState.Height - 1;
+        int finalTurnNumber = state.TurnNumber;
+        TurnState activeTurn = state.Turn;
+        CardInstance monster = finalHand.Single(card => card.Definition == attacker);
+        CardInstance equipment = finalHand.Single(card => card.Definition == armor);
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, finalActor, monster.Id, x, y)));
+        Assert.IsTrue(MatchRules.IsBoardFull(state));
+        Assert.AreEqual(activeTurn, state.Turn);
+        Assert.IsFalse(MatchRules.TryApply(state, otherEndTurn));
+        Assert.IsTrue(MatchRules.TryApply(state, new PlayEquipCardAction(state.Id, finalActor, equipment.Id, monster.Id)));
+        Assert.AreSame(equipment, monster.Equipment.Single());
+        Assert.IsTrue(MatchRules.TryApply(state, new AttackCardAction(state.Id, finalActor, monster.Id, -1, 0)));
+        Assert.AreEqual(finalActor, state.GetCellOwner(x - 1, y));
+        Assert.AreEqual(activeTurn, state.Turn);
 
-        Assert.IsTrue(applied);
+        Assert.IsTrue(MatchRules.TryApply(state, finalEndTurn));
         Assert.AreEqual(TurnState.GameOver, state.Turn);
-        Assert.IsFalse(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Player)));
+        Assert.AreEqual(finalTurnNumber, state.TurnNumber);
+        Assert.IsFalse(MatchRules.TryApply(state, finalEndTurn));
     }
 
     [Test]
