@@ -8,9 +8,11 @@ using static MatchVisuals;
 /// <summary>Binds the match state to the HUD and hand card prefabs.</summary>
 public class HandUI : MonoBehaviour
 {
+    private const float OpponentPlayDuration = 2.5f;
+
     [SerializeField] private RectTransform handContent;
     [SerializeField] private ScrollRect handScroll;
-    [SerializeField] private TMP_Text discardContents;
+    [SerializeField] private RectTransform discardContents;
     [SerializeField] private Button playerDiscardButton;
     [SerializeField] private Button enemyDiscardButton;
     [SerializeField] private LayoutElement handContentWidth;
@@ -34,6 +36,7 @@ public class HandUI : MonoBehaviour
     [SerializeField] private CardPreviewView cardPreview;
 
     private readonly List<HandCardView> handCards = new();
+    private readonly List<HandCardView> discardCards = new();
     private readonly List<RectTransform> opponentCardBacks = new();
     private MatchManager matchManager;
     private CanvasScaler canvasScaler;
@@ -43,17 +46,21 @@ public class HandUI : MonoBehaviour
     private bool? portraitLayout;
     private Vector2 layoutSize;
     private CardHoldPreview previewSource;
+    private float opponentPlayEndsAt;
     private PlayerSide? openDiscardPile;
+
+    internal bool IsShowingOpponentPlay => opponentPlayEndsAt > 0f;
 
     public void Initialize(MatchManager matchManager)
     {
         openDiscardPile = null;
+        HideOpponentPlay();
         Refresh(matchManager);
     }
 
     internal bool ShowCardPreview(CardInstance card, CardHoldPreview source)
     {
-        if (cardPreview == null) return false;
+        if (cardPreview == null || IsShowingOpponentPlay) return false;
         previewSource = source;
         cardPreview.Show(card, matchManager.GetArtwork(card.Definition), ((RectTransform)transform).rect.size,
             MatchRules.GetAttack(matchManager.State, card));
@@ -62,9 +69,30 @@ public class HandUI : MonoBehaviour
 
     internal void HideCardPreview(CardHoldPreview source)
     {
-        if (previewSource != source || cardPreview == null) return;
+        if (IsShowingOpponentPlay || previewSource != source || cardPreview == null) return;
         cardPreview.gameObject.SetActive(false);
         previewSource = null;
+    }
+
+    internal void ShowOpponentPlay(CardInstance card)
+    {
+        if (cardPreview == null || !isActiveAndEnabled) return;
+        previewSource = null;
+        opponentPlayEndsAt = Time.unscaledTime + OpponentPlayDuration;
+        cardPreview.Show(card, matchManager.GetArtwork(card.Definition), ((RectTransform)transform).rect.size,
+            card.Definition.Attack, HideOpponentPlay);
+    }
+
+    private void HideOpponentPlay()
+    {
+        if (!IsShowingOpponentPlay) return;
+        opponentPlayEndsAt = 0f;
+        if (cardPreview != null) cardPreview.gameObject.SetActive(false);
+    }
+
+    private void OnDisable()
+    {
+        HideOpponentPlay();
     }
 
     public void Refresh(MatchManager matchManager)
@@ -132,22 +160,22 @@ public class HandUI : MonoBehaviour
     {
         openDiscardPile = openDiscardPile == side ? null : side;
         handScroll.StopMovement();
-        discardContents.rectTransform.anchoredPosition = Vector2.zero;
+        discardContents.anchoredPosition = Vector2.zero;
         Refresh(matchManager);
     }
 
     private void RefreshDiscardPile(MatchState state)
     {
         bool showDiscard = openDiscardPile.HasValue;
-        RectTransform content = showDiscard ? discardContents.rectTransform : handContent;
+        RectTransform content = showDiscard ? discardContents : handContent;
         if (handScroll.content != content)
         {
             handScroll.StopMovement();
             handContent.gameObject.SetActive(!showDiscard);
             discardContents.gameObject.SetActive(showDiscard);
             handScroll.content = content;
-            handScroll.horizontal = !showDiscard;
-            handScroll.vertical = showDiscard;
+            handScroll.horizontal = true;
+            handScroll.vertical = false;
         }
 
         if (!showDiscard)
@@ -158,8 +186,36 @@ public class HandUI : MonoBehaviour
 
         bool player = openDiscardPile == PlayerSide.Player;
         IReadOnlyList<CardInstance> pile = player ? state.PlayerDiscardPile : state.EnemyDiscardPile;
-        handLabel.text = player ? "YOUR DISCARD PILE" : "OPPONENT DISCARD PILE";
-        discardContents.text = pile.Count == 0 ? "No discarded cards" : string.Join("\n", pile.Select(card => card.Definition.Name));
+        handLabel.text = $"{(player ? "YOUR" : "OPPONENT")} DISCARD PILE   /   {pile.Count:00}";
+        RefreshDiscardCards(pile);
+    }
+
+    private void RefreshDiscardCards(IReadOnlyList<CardInstance> pile)
+    {
+        for (int i = discardCards.Count - 1; i >= 0; i--)
+        {
+            HandCardView view = discardCards[i];
+            if (pile.Contains(view.Card)) continue;
+            view.gameObject.SetActive(false);
+            Destroy(view.gameObject);
+            discardCards.RemoveAt(i);
+        }
+
+        for (int i = 0; i < pile.Count; i++)
+        {
+            CardInstance card = pile[i];
+            HandCardView view = discardCards.Find(candidate => candidate.Card == card);
+            if (view == null)
+            {
+                CardDefinition definition = card.Definition;
+                HandCardView prefab = definition.IsSupportCard || definition.Type == CardType.Equip
+                    ? supportCardPrefab : monsterCardPrefab;
+                view = Instantiate(prefab, discardContents, false);
+                discardCards.Add(view);
+            }
+            view.transform.SetSiblingIndex(i);
+            view.Bind(card, matchManager, false);
+        }
     }
 
     private void RefreshHandCards()
@@ -202,6 +258,7 @@ public class HandUI : MonoBehaviour
 
     private void LateUpdate()
     {
+        if (IsShowingOpponentPlay && Time.unscaledTime >= opponentPlayEndsAt) HideOpponentPlay();
         if (matchManager != null) UpdateLayout();
     }
 

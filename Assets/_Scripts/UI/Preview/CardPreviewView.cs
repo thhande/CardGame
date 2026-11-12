@@ -1,11 +1,14 @@
+using System;
 using System.Linq;
 using System.Text;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-public sealed class CardPreviewView : MonoBehaviour
+public sealed class CardPreviewView : MonoBehaviour, IPointerClickHandler
 {
+    [SerializeField] private Image backdrop;
     [SerializeField] private RectTransform frame;
     [SerializeField] private Image artwork;
     [SerializeField] private TMP_Text title;
@@ -13,8 +16,14 @@ public sealed class CardPreviewView : MonoBehaviour
     [SerializeField] private TMP_Text descriptionLabel;
     [SerializeField] private GameObject[] arrows;
 
-    internal void Show(CardInstance card, Sprite sprite, Vector2 canvasSize, int attack)
+    private Action dismissOpponentPlay;
+
+    internal void Show(CardInstance card, Sprite sprite, Vector2 canvasSize, int attack, Action dismiss = null)
     {
+        dismissOpponentPlay = dismiss;
+        bool opponentPlay = dismiss != null;
+        backdrop.raycastTarget = opponentPlay;
+
         Vector2 frameSize = frame.sizeDelta;
         float scale = Mathf.Min(1, (canvasSize.x - 24) / frameSize.x, (canvasSize.y - 24) / frameSize.y);
         frame.localScale = Vector3.one * scale;
@@ -22,10 +31,11 @@ public sealed class CardPreviewView : MonoBehaviour
         CardDefinition definition = card.Definition;
         MatchVisuals.SetPortrait(artwork, sprite);
         title.text = definition.Name;
-        stats.text = definition.IsSupportCard
+        string cardDetails = definition.IsSupportCard
             ? definition.Type == CardType.HiSupporter ? "HI SUPPORT" : "SUPPORT"
             : definition.Type == CardType.Equip ? "EQUIP"
             : $"{attack} ATK     {card.Defense} DEF     {card.CurrentHealth} / {card.MaxHealth} HP";
+        stats.text = opponentPlay ? $"OPPONENT PLAYED  /  {cardDetails}" : cardDetails;
 
         // The prefab stores arrows in reading order, with no center entry.
         int arrowIndex = 0;
@@ -45,8 +55,8 @@ public sealed class CardPreviewView : MonoBehaviour
             description.Append($"Sacrifice {definition.SacrificeCount} living monsters you control and summon this card on the last one's tile.");
         if (definition.IsSupportCard)
         {
-            description.AppendLine(definition.SupportEffect?.Description);
-            description.Append(definition.SupportCondition?.Description);
+            description.Append(definition.SupportEffect?.Description);
+            if (!opponentPlay) description.AppendLine().Append(definition.SupportCondition?.Description);
         }
         if (definition.Type == CardType.Equip)
             description.Append(definition.EquipEffect?.Description);
@@ -76,5 +86,16 @@ public sealed class CardPreviewView : MonoBehaviour
 
         descriptionLabel.text = description.ToString();
         gameObject.SetActive(true);
+    }
+
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (eventData.button == PointerEventData.InputButton.Left) dismissOpponentPlay?.Invoke();
+    }
+
+    private void OnDisable()
+    {
+        dismissOpponentPlay = null;
+        if (backdrop != null) backdrop.raycastTarget = false;
     }
 }
