@@ -13,7 +13,7 @@ public sealed class CardPreviewView : MonoBehaviour
     [SerializeField] private TMP_Text descriptionLabel;
     [SerializeField] private GameObject[] arrows;
 
-    internal void Show(CardInstance card, Sprite sprite, Vector2 canvasSize)
+    internal void Show(CardInstance card, Sprite sprite, Vector2 canvasSize, int attack)
     {
         Vector2 frameSize = frame.sizeDelta;
         float scale = Mathf.Min(1, (canvasSize.x - 24) / frameSize.x, (canvasSize.y - 24) / frameSize.y);
@@ -25,7 +25,7 @@ public sealed class CardPreviewView : MonoBehaviour
         stats.text = definition.IsSupportCard
             ? definition.Type == CardType.HiSupporter ? "HI SUPPORT" : "SUPPORT"
             : definition.Type == CardType.Equip ? "EQUIP"
-            : $"{definition.Attack} ATK     {card.Defense} DEF     {card.CurrentHealth} / {card.MaxHealth} HP";
+            : $"{attack} ATK     {card.Defense} DEF     {card.CurrentHealth} / {card.MaxHealth} HP";
 
         // The prefab stores arrows in reading order, with no center entry.
         int arrowIndex = 0;
@@ -39,6 +39,10 @@ public sealed class CardPreviewView : MonoBehaviour
         }
 
         StringBuilder description = new StringBuilder();
+        if (definition.SacrificeCount == 1)
+            description.Append("Sacrifice a living monster you control and summon this card in its place.");
+        else if (definition.SacrificeCount > 1)
+            description.Append($"Sacrifice {definition.SacrificeCount} living monsters you control and summon this card on the last one's tile.");
         if (definition.IsSupportCard)
         {
             description.AppendLine(definition.SupportEffect?.Description);
@@ -62,6 +66,10 @@ public sealed class CardPreviewView : MonoBehaviour
                 MonsterEffectType.PlacedDown => "On placement",
                 MonsterEffectType.ToDiscardPile => "On discard",
                 MonsterEffectType.Die => "On defeat",
+                MonsterEffectType.OnAttacked => "Passive · When attacked",
+                MonsterEffectType.OnAttack => "Passive · When attacking",
+                MonsterEffectType.TurnStarted => "Automatic · Turn start",
+                MonsterEffectType.Aura => "Passive · Aura",
                 _ => "Automatic"
             }).AppendLine("</b>").Append(entry.Effect.Description);
         }

@@ -15,7 +15,7 @@ MonoBehaviour:
   <CardName>k__BackingField: Monster suicide
   <CardDescription>k__BackingField: Set Health of an alive monster in your control
     in field to 0
-  <Artwork>k__BackingField: {fileID: 0}
+  <Artwork>k__BackingField: {fileID: 21300000, guid: 81311015e761c0b40b7dde486ea084ce, type: 3}
   <Effect>k__BackingField: {fileID: 11400000, guid: 3dcef65e9c0f4b34a8809ba0be8daeac, type: 2}
   <ActiveCondition>k__BackingField: {fileID: 11400000, guid: 0d459aae096845ada7019edd14cd4d05, type: 2}
   isHiSupporter: 1

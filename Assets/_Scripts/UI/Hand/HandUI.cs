@@ -55,7 +55,8 @@ public class HandUI : MonoBehaviour
     {
         if (cardPreview == null) return false;
         previewSource = source;
-        cardPreview.Show(card, matchManager.GetArtwork(card.Definition), ((RectTransform)transform).rect.size);
+        cardPreview.Show(card, matchManager.GetArtwork(card.Definition), ((RectTransform)transform).rect.size,
+            MatchRules.GetAttack(matchManager.State, card));
         return true;
     }
 
@@ -78,6 +79,7 @@ public class HandUI : MonoBehaviour
         int enemyCells = MatchRules.CountOwnedCards(state, PlayerSide.Enemy);
         bool playerTurn = matchManager.CurrentState == TurnState.PlayerTurn;
         bool gameOver = matchManager.CurrentState == TurnState.GameOver;
+        int sacrificeCount = matchManager.SelectedHandCard?.Definition.SacrificeCount ?? 0;
         turnLabel.text = gameOver
             ? playerCells == enemyCells ? "Draw" : playerCells > enemyCells ? "Victory" : "Defeat"
             : playerTurn ? "Your turn" : "Opponent's turn";
@@ -85,6 +87,9 @@ public class HandUI : MonoBehaviour
         promptLabel.text = gameOver ? (MatchRules.IsBoardFull(state) ? "The board is full" : "Both sides ran out of cards")
             : !playerTurn ? "Waiting for your opponent"
             : matchManager.SelectedHandCard?.Definition.Type == CardType.Equip ? "Choose a friendly monster"
+            : sacrificeCount == 1 ? "Choose a living monster you control to sacrifice"
+            : sacrificeCount > 1
+                ? $"Choose living monsters to sacrifice ({matchManager.SelectedSacrificeCount}/{sacrificeCount})"
             : matchManager.SelectedHandCard?.Definition.SupportEffect is ICellTargetedSupportEffect targetedEffect
                 ? targetedEffect.TargetPrompt
             : matchManager.SelectedHandCard != null ? "Choose an empty tile"

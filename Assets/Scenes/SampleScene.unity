@@ -709,6 +709,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: MatchHUD
       objectReference: {fileID: 0}
+    - target: {fileID: 9009544883942912131, guid: 01f600ffc5ed60846ad341fe17fdd02f, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -805,6 +809,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   boardManager: {fileID: 1553811753}
   playerTestDeck:
+  - {fileID: 11400000, guid: 220cf7866c9874e449fddeb28a892a89, type: 2}
   - {fileID: 11400000, guid: e0e7dac27cfa4970aad86239901203d6, type: 2}
   - {fileID: 11400000, guid: eae340a3bf1447219135e6c8a3ad0989, type: 2}
   - {fileID: 11400000, guid: fa2d94b7dbc441c9afcba574221214e4, type: 2}
@@ -813,14 +818,17 @@ MonoBehaviour:
   - {fileID: 11400000, guid: da22028f28814effba7f740248dfdb47, type: 2}
   - {fileID: 11400000, guid: c93855d4c3584e419f92bc40338ebaa4, type: 2}
   - {fileID: 11400000, guid: ef56f0b1163f7454280341a66aa4543c, type: 2}
-  - {fileID: 11400000, guid: 8f9b6fa86cd74864902dca9db485117a, type: 2}
   - {fileID: 11400000, guid: 31eed8dcc5c94f82ab9138f80c1cf346, type: 2}
   - {fileID: 11400000, guid: 0934ed46de3712d43a9bbcf55923bfca, type: 2}
   - {fileID: 11400000, guid: 0934ed46de3712d43a9bbcf55923bfca, type: 2}
-  - {fileID: 11400000, guid: 6a3848b627cc4dcaa5a81fb198a37cc5, type: 2}
-  - {fileID: 11400000, guid: 6a3848b627cc4dcaa5a81fb198a37cc5, type: 2}
+  - {fileID: 11400000, guid: 3b2ffbc9f55a3ea43a0ed993bbdb1563, type: 2}
+  - {fileID: 11400000, guid: 3b2ffbc9f55a3ea43a0ed993bbdb1563, type: 2}
+  - {fileID: 11400000, guid: 220cf7866c9874e449fddeb28a892a89, type: 2}
+  - {fileID: 11400000, guid: 922d489f35a340849ac8fc77a4a6f979, type: 2}
   - {fileID: 11400000, guid: 13390526cd27e1c4cab61449cfd2b9fb, type: 2}
-  - {fileID: 11400000, guid: c93855d4c3584e419f92bc40338ebaa4, type: 2}
+  - {fileID: 11400000, guid: e51e189f49da05e488d1dcc7558c8dbe, type: 2}
+  - {fileID: 11400000, guid: e51e189f49da05e488d1dcc7558c8dbe, type: 2}
+  - {fileID: 11400000, guid: e51e189f49da05e488d1dcc7558c8dbe, type: 2}
   enemyTestDeck:
   - {fileID: 11400000, guid: e0e7dac27cfa4970aad86239901203d6, type: 2}
   - {fileID: 11400000, guid: fa2d94b7dbc441c9afcba574221214e4, type: 2}
@@ -836,7 +844,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 8f9b6fa86cd74864902dca9db485117a, type: 2}
   - {fileID: 11400000, guid: c93855d4c3584e419f92bc40338ebaa4, type: 2}
   - {fileID: 11400000, guid: ef56f0b1163f7454280341a66aa4543c, type: 2}
-  - {fileID: 11400000, guid: 31eed8dcc5c94f82ab9138f80c1cf346, type: 2}
   - {fileID: 11400000, guid: 31eed8dcc5c94f82ab9138f80c1cf346, type: 2}
   handUI: {fileID: 1546152281}
 --- !u!1001 &1729805464

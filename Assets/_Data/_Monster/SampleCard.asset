@@ -13,11 +13,15 @@ MonoBehaviour:
   m_Name: SampleCard
   m_EditorClassIdentifier: 
   <CardName>k__BackingField: Mika
-  <Attack>k__BackingField: 12
+  <CardDescription>k__BackingField: 
+  <Artwork>k__BackingField: {fileID: 21300010, guid: 6003213c651c481393f2e34a5d74f218, type: 3}
+  <Attack>k__BackingField: 6
   <Defense>k__BackingField: 2
   <Health>k__BackingField: 5
-  <Artwork>k__BackingField: {fileID: 21300010, guid: 6003213c651c481393f2e34a5d74f218, type: 3}
-  <Type>k__BackingField: 0
+  sacrificeCount: 0
+  effects: []
+  legacyEffectType: 0
+  legacyEffect: {fileID: 0}
   attackDirections:
   - <X>k__BackingField: 1
     <Y>k__BackingField: 0

@@ -21,6 +21,7 @@ public class MatchManager : Singleton<MatchManager>
     private MatchState matchState;
     private IPlayerAgent enemyAgent;
     private CardInstance selectedCard;
+    private readonly List<CardInstance> selectedSacrifices = new List<CardInstance>();
     private SynchronizationContext unityContext;
     private readonly Dictionary<CardDefinition, Sprite> cardArtwork = new Dictionary<CardDefinition, Sprite>();
 
@@ -32,6 +33,7 @@ public class MatchManager : Singleton<MatchManager>
     public IReadOnlyList<CardInstance> EnemyDeck => matchState != null ? matchState.EnemyDeck : emptyCards;
     public IReadOnlyList<CardInstance> EnemyHand => matchState != null ? matchState.EnemyHand : emptyCards;
     public CardInstance SelectedHandCard => selectedCard;
+    public int SelectedSacrificeCount => selectedSacrifices.Count;
 
     private static readonly IReadOnlyList<CardInstance> emptyCards = new List<CardInstance>();
 
@@ -84,7 +86,7 @@ public class MatchManager : Singleton<MatchManager>
             enemyTestDeck.Select(CreateCardDefinition).ToList(),
             DeckSize, OpeningHandSize,
             Random.Range(0, int.MaxValue));
-        selectedCard = null;
+        SetSelectedCard(null);
         if (enemyAgent == null) enemyAgent = new RandomPlayerAgent(Random.Range(0, int.MaxValue));
         SyncBoard();
         if (handUI != null) handUI.Initialize(this);
@@ -121,14 +123,21 @@ public class MatchManager : Singleton<MatchManager>
         CardType type = card.Definition.Type;
         if (type != CardType.Equip && (type != CardType.Monster || NormalSummonThisTurn <= 0)) return;
 
-        selectedCard = type == CardType.Equip && selectedCard == card ? null : card;
+        SetSelectedCard(type == CardType.Equip && selectedCard == card ? null : card);
         RefreshUI();
+    }
+
+    private void SetSelectedCard(CardInstance card)
+    {
+        if (selectedCard != card) selectedSacrifices.Clear();
+        selectedCard = card;
     }
 
     public void OnBoardSlotClicked(BoardSlot slot)
     {
         if (slot == null || CurrentState != TurnState.PlayerTurn) return;
         if (selectedCard?.Definition.Type == CardType.Equip
+            || selectedCard?.Definition.SacrificeCount > 0
             || selectedCard?.Definition.SupportEffect is ICellTargetedSupportEffect)
         {
             TryPlaceCardOnBoard(slot);
@@ -140,7 +149,7 @@ public class MatchManager : Singleton<MatchManager>
         {
             if (matchState.GetCellOwner(boardCard.X, boardCard.Y) == PlayerSide.Player && selectedCard != null)
             {
-                selectedCard = null;
+                SetSelectedCard(null);
                 RefreshUI();
             }
             return;
@@ -174,7 +183,28 @@ public class MatchManager : Singleton<MatchManager>
             return;
         }
 
+        if (selectedCard.Definition.SacrificeCount > 1)
+        {
+            SelectSacrifice(targetSlot);
+            return;
+        }
+
         SubmitAction(new PlaceCardAction(matchState.Id, PlayerSide.Player, selectedCard.Id, targetSlot.x, targetSlot.y));
+    }
+
+    private void SelectSacrifice(BoardSlot slot)
+    {
+        CardInstance sacrifice = slot.placedCard;
+        if (!MatchRules.CanSacrifice(matchState, PlayerSide.Player, sacrifice)) return;
+        if (!selectedSacrifices.Remove(sacrifice)) selectedSacrifices.Add(sacrifice);
+
+        if (selectedSacrifices.Count == selectedCard.Definition.SacrificeCount)
+        {
+            if (SubmitAction(new PlaceCardAction(matchState.Id, PlayerSide.Player, selectedCard.Id,
+                    slot.x, slot.y, selectedSacrifices.Select(card => card.Id)))) return;
+            selectedSacrifices.Remove(sacrifice);
+        }
+        RefreshUI();
     }
 
     public void TryActivateMonsterEffect(BoardSlot sourceSlot)
@@ -192,7 +222,7 @@ public class MatchManager : Singleton<MatchManager>
         if (card.Definition.SupportEffect is ICellTargetedSupportEffect)
         {
             if (!MatchRules.CanPlaySupportCard(matchState, PlayerSide.Player, card.Id)) return;
-            selectedCard = selectedCard == card ? null : card;
+            SetSelectedCard(selectedCard == card ? null : card);
             RefreshUI();
             return;
         }
@@ -212,20 +242,20 @@ public class MatchManager : Singleton<MatchManager>
 
         if (action is PlaceCardAction placement)
         {
-            if (placement.Actor == PlayerSide.Player) selectedCard = null;
+            if (placement.Actor == PlayerSide.Player) SetSelectedCard(null);
             string actor = placement.Actor == PlayerSide.Player ? "Player" : "Opponent";
             Debug.Log($"{actor} played a card at ({placement.X}, {placement.Y}).");
         }
         else if (action is PlaySupportCardAction supportPlay)
         {
             if (supportPlay.Actor == PlayerSide.Player && selectedCard?.Definition.IsSupportCard == true)
-                selectedCard = null;
+                SetSelectedCard(null);
             string actor = supportPlay.Actor == PlayerSide.Player ? "Player" : "Enemy";
             Debug.Log($"{actor} played a support card.");
         }
         else if (action is PlayEquipCardAction equipPlay)
         {
-            if (equipPlay.Actor == PlayerSide.Player) selectedCard = null;
+            if (equipPlay.Actor == PlayerSide.Player) SetSelectedCard(null);
         }
         else if (action is ActivateMonsterEffectAction monsterEffect)
         {
@@ -239,10 +269,12 @@ public class MatchManager : Singleton<MatchManager>
         }
         else if (action is EndTurnAction)
         {
-            selectedCard = null;
+            SetSelectedCard(null);
             if (CurrentState == TurnState.EnemyTurn) StartCoroutine(EnemyTurnRoutine());
         }
 
+        if (selectedSacrifices.Count > 0)
+            selectedSacrifices.RemoveAll(card => !MatchRules.CanSacrifice(matchState, PlayerSide.Player, card));
         SyncBoard();
         if (CurrentState == TurnState.GameOver) SetGameOver();
         else RefreshUI();
@@ -291,7 +323,7 @@ public class MatchManager : Singleton<MatchManager>
 
         if (matchState != activeState || activeState.Turn == TurnState.GameOver) yield break;
 
-        selectedCard = null;
+        SetSelectedCard(null);
         RefreshUI();
         Debug.Log("--- PLAYER TURN ---");
     }
@@ -301,7 +333,7 @@ public class MatchManager : Singleton<MatchManager>
         int playerCells = MatchRules.CountOwnedCards(matchState, PlayerSide.Player);
         int enemyCells = MatchRules.CountOwnedCards(matchState, PlayerSide.Enemy);
         string winner = playerCells > enemyCells ? "Player" : enemyCells > playerCells ? "Enemy" : "Draw";
-        selectedCard = null;
+        SetSelectedCard(null);
         RefreshUI();
         Debug.Log($"=== GAME OVER, WINNER: {winner} ===");
     }

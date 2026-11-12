@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 08f5d4fdc41b896419654e6fc17f6176, type: 3}
+  m_Name: BabyParasite
+  m_EditorClassIdentifier: 
+  <CardName>k__BackingField: Baby Parasite
+  <CardDescription>k__BackingField: 
+  <Artwork>k__BackingField: {fileID: 21300000, guid: 298f41f715513fe469e10bf6dff7e3ab, type: 3}
+  <Attack>k__BackingField: 3
+  <Defense>k__BackingField: 4
+  <Health>k__BackingField: 4
+  sacrificeCount: 0
+  effects:
+  - activateType: 4
+    effect: {fileID: 11400000, guid: f52fbb86bad0478ca180e8a73210d9af, type: 2}
+  legacyEffectType: 0
+  legacyEffect: {fileID: 0}
+  attackDirections:
+  - <X>k__BackingField: 1
+    <Y>k__BackingField: 0
+  - <X>k__BackingField: -1
+    <Y>k__BackingField: 0
+  - <X>k__BackingField: 0
+    <Y>k__BackingField: 1
+  - <X>k__BackingField: 0
+    <Y>k__BackingField: -1

@@ -11,10 +11,10 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b9290d4f638d431e88c026d98defc723, type: 3}
   m_Name: CellBlocker
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   <CardName>k__BackingField: Cell Blocker
   <CardDescription>k__BackingField: Block an empty tile on your opponent's next turn.
-  <Artwork>k__BackingField: {fileID: 0}
+  <Artwork>k__BackingField: {fileID: 21300000, guid: fcd5062435a4f63489e4682014998a16, type: 3}
   <Effect>k__BackingField: {fileID: 11400000, guid: 4f634943a7e94c8e9fd7cfa55e4ce6a3, type: 2}
   <ActiveCondition>k__BackingField: {fileID: 11400000, guid: 0d459aae096845ada7019edd14cd4d05, type: 2}
   isHiSupporter: 1

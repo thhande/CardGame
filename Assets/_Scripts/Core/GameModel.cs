@@ -63,7 +63,11 @@ public enum MonsterEffectType
     ChooseToTrigger,
     PlacedDown,
     ToDiscardPile,
-    Die
+    Die,
+    OnAttacked,
+    OnAttack,
+    TurnStarted,
+    Aura
 }
 
 public sealed class MonsterEffectEntry
@@ -88,6 +92,28 @@ public interface IMonsterEffect
 public interface IMonsterEffectOperation
 {
     void Apply(MatchState state, PlayerSide actor, CardInstance source);
+}
+
+public interface IAttackDamagePrevention
+{
+    bool PreventsAttackDamage(CardInstance defender, CardInstance attacker);
+}
+
+public interface IAttackDamageOverride
+{
+    bool TryGetAttackDamage(CardInstance attacker, CardInstance target, out int damage);
+}
+
+public interface IMonsterAttackAura
+{
+    int GetAttackBonus(CardInstance source, CardInstance ally);
+}
+
+public interface IMonsterCombatModifier
+{
+    int AttackBonus { get; }
+    bool PreventsReflectDamage { get; }
+    bool IsActive(MatchState state, CardInstance card);
 }
 
 public sealed class MonsterEffectContext
@@ -198,6 +224,7 @@ public sealed class CardDefinition
     public int Defense { get; }
     public int Health { get; }
     public CardType Type { get; }
+    public int SacrificeCount { get; }
     public bool IsSupportCard => Type == CardType.Supporter || Type == CardType.HiSupporter;
     public IReadOnlyList<CardDirection> AttackDirections { get; }
     public ISupportEffect SupportEffect { get; }
@@ -242,11 +269,12 @@ public sealed class CardDefinition
     }
 
     public CardDefinition(string id, string name, int attack, int defense, int health, CardType type,
-        IReadOnlyList<MonsterEffectEntry> monsterEffects, CardDirection[] attackDirections)
+        IReadOnlyList<MonsterEffectEntry> monsterEffects, CardDirection[] attackDirections, int sacrificeCount = 0)
         : this(id, name, attack, defense, health, type, attackDirections)
     {
         if (monsterEffects == null) throw new ArgumentNullException(nameof(monsterEffects));
         MonsterEffects = new List<MonsterEffectEntry>(monsterEffects).AsReadOnly();
+        SacrificeCount = Math.Max(0, sacrificeCount);
     }
 
     public CardDefinition(string id, string name, EquipEffect equipEffect)
@@ -269,6 +297,7 @@ public sealed class CardInstance
     public IReadOnlyList<CardInstance> Equipment { get; private set; } = Array.Empty<CardInstance>();
     public int X { get; internal set; }
     public int Y { get; internal set; }
+    public int PlacedTurnNumber { get; internal set; }
     public int RemainAttacks { get; internal set; } = 1;
 
     private List<CardInstance> equipment;
@@ -386,6 +415,7 @@ public sealed class MatchState
     private readonly List<CardInstance> enemyDiscardPile = new List<CardInstance>();
     private readonly BoardCell[,] board = new BoardCell[Width, Height];
     private readonly List<MatchTurn> turnHistory = new List<MatchTurn>();
+    private long nextCardId = 1;
 
     private struct BoardCell
     {
@@ -476,6 +506,7 @@ public sealed class MatchState
     {
         card.X = x;
         card.Y = y;
+        card.PlacedTurnNumber = TurnNumber;
         ref BoardCell cell = ref GetCell(x, y);
         cell.Card = card;
         cell.Owner = cellOwner;
@@ -504,6 +535,58 @@ public sealed class MatchState
         foreach (CardInstance equipment in card.Equipment)
             DiscardCard(equipment);
         card.ClearEquipment();
+    }
+
+    internal CardInstance CreateCard(CardDefinition definition, PlayerSide owner)
+    {
+        return new CardInstance(nextCardId++, definition, owner);
+    }
+
+    internal void ResolveDefeat(CardInstance card, bool captureCell = true)
+    {
+        int x = card.X;
+        int y = card.Y;
+        PlayerSide controller = GetCellOwner(x, y);
+        foreach (MonsterEffectEntry entry in card.Definition.MonsterEffects)
+        {
+            if (entry?.ActivateType != MonsterEffectType.Die) continue;
+            MonsterEffectContext context = new MonsterEffectContext(controller, card, TurnHistory,
+                operation => operation.Apply(this, controller, card));
+            if (entry.Effect.ActiveCondition(context)) entry.Effect.Resolve(context);
+            if (GetCardAt(x, y) != card) return;
+        }
+
+        if (!captureCell) return;
+        DiscardEquipment(card);
+        SwitchCellOwner(x, y);
+    }
+
+    public void ReplaceDefeatedMonster(CardInstance monster, CardDefinition replacement)
+    {
+        if (monster == null) throw new ArgumentNullException(nameof(monster));
+        if (replacement == null) throw new ArgumentNullException(nameof(replacement));
+        int x = monster.X;
+        int y = monster.Y;
+        if (monster.IsAlive || monster.Definition.Type != CardType.Monster
+            || x < 0 || x >= Width || y < 0 || y >= Height || GetCardAt(x, y) != monster)
+            throw new InvalidOperationException("Only a defeated monster on the board can be replaced.");
+        if (replacement.Type != CardType.Monster || replacement.Health <= 0)
+            throw new ArgumentException("The replacement must be a living monster.", nameof(replacement));
+
+        PlayerSide controller = GetCellOwner(x, y);
+        RemoveCardAt(x, y);
+        DiscardCard(monster);
+        PlaceCard(x, y, CreateCard(replacement, controller), controller);
+    }
+
+    public void DamageBoardMonster(int x, int y, int damage, bool captureCellOnDefeat = true)
+    {
+        if (damage <= 0) throw new ArgumentOutOfRangeException(nameof(damage));
+        CardInstance monster = GetCardAt(x, y);
+        if (monster == null || !monster.IsAlive || monster.Definition.Type != CardType.Monster) return;
+
+        monster.TakeDamage(damage);
+        if (!monster.IsAlive) ResolveDefeat(monster, captureCellOnDefeat);
     }
 
     internal void ReturnBoardCardToDeck(CardInstance card, PlayerSide owner)

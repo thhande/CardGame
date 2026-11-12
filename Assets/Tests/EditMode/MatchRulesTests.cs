@@ -1169,6 +1169,293 @@ public class MatchRulesTests
         Assert.AreEqual(1, defender.CurrentHealth);
     }
 
+    [TestCase(-1, true)]
+    [TestCase(1, false)]
+    public void HighWall_BlocksDamageOnlyWhenItsArrowPointsAtTheAttacker(int directionX, bool blocksDamage)
+    {
+        MonsterCardData highWall = AssetDatabase.LoadAssetAtPath<MonsterCardData>("Assets/_Data/_Monster/HighWall.asset");
+        Assert.IsNotNull(highWall);
+        CardDefinition wall = highWall.ToDefinition();
+        Assert.AreEqual(MonsterEffectType.OnAttacked, wall.MonsterEffects.Single().ActivateType);
+        CardDefinition attacker = new CardDefinition("attacker", "Attacker", 3, 0, 20, CardType.Monster,
+            new CardDirection(directionX, 0));
+        MatchState state = MatchRules.CreateMatch(
+            new List<CardDefinition> { attacker, attacker }, new List<CardDefinition> { wall }, 2, 1, 42);
+        CardInstance attackerCard = state.PlayerHand[0];
+        CardInstance wallCard = state.EnemyHand[0];
+
+        Assert.IsTrue(MatchRules.TryApply(state,
+            new PlaceCardAction(state.Id, PlayerSide.Player, attackerCard.Id, 1 - directionX, 1)));
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Player)));
+        Assert.IsTrue(MatchRules.TryApply(state,
+            new PlaceCardAction(state.Id, PlayerSide.Enemy, wallCard.Id, 1, 1)));
+        Assert.IsFalse(MatchRules.CanActivateMonsterEffect(state, PlayerSide.Enemy, wallCard.Id));
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Enemy)));
+
+        Assert.IsTrue(MatchRules.TryApply(state,
+            new AttackCardAction(state.Id, PlayerSide.Player, attackerCard.Id, directionX, 0)));
+        Assert.AreEqual(wall.Health - (blocksDamage ? 0 : attacker.Attack), wallCard.CurrentHealth);
+        Assert.AreEqual(attacker.Health - (blocksDamage ? wall.Defense : 0), attackerCard.CurrentHealth);
+        Assert.AreEqual(0, attackerCard.RemainAttacks);
+    }
+
+    [TestCase(-1, -1, true)]
+    [TestCase(1, 1, false)]
+    public void LegendaryAssassin_DealsRemainingHealthUnlessTheTargetPointsBack(
+        int targetArrowX, int targetArrowY, bool pointsBack)
+    {
+        MonsterCardData assassinData = AssetDatabase.LoadAssetAtPath<MonsterCardData>(
+            "Assets/_Data/_Monster/LegendaryAssassin.asset");
+        Assert.IsNotNull(assassinData);
+        CardDefinition assassin = assassinData.ToDefinition();
+        Assert.AreEqual(MonsterEffectType.OnAttack, assassin.MonsterEffects.Single().ActivateType);
+        CardDefinition defender = new CardDefinition("defender", "Defender", 1, 2, 20, CardType.Monster,
+            new CardDirection(targetArrowX, targetArrowY));
+        MatchState state = MatchRules.CreateMatch(
+            new List<CardDefinition> { assassin }, new List<CardDefinition> { defender }, 1, 1, 42);
+        CardInstance assassinCard = state.PlayerHand[0];
+        CardInstance defenderCard = state.EnemyHand[0];
+
+        Assert.IsTrue(MatchRules.TryApply(state,
+            new PlaceCardAction(state.Id, PlayerSide.Player, assassinCard.Id, 1, 1)));
+        Assert.IsFalse(MatchRules.CanActivateMonsterEffect(state, PlayerSide.Player, assassinCard.Id));
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Player)));
+        Assert.IsTrue(MatchRules.TryApply(state,
+            new PlaceCardAction(state.Id, PlayerSide.Enemy, defenderCard.Id, 2, 2)));
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Enemy)));
+        int remainingHealth = defender.Health - 1;
+        defenderCard.ForceSetHealth(remainingHealth);
+
+        Assert.IsTrue(MatchRules.TryApply(state,
+            new AttackCardAction(state.Id, PlayerSide.Player, assassinCard.Id, 1, 1)));
+        Assert.AreEqual(pointsBack ? remainingHealth - assassin.Attack : 0, defenderCard.CurrentHealth);
+        Assert.AreEqual(assassin.Health - (pointsBack ? defender.Defense : 0), assassinCard.CurrentHealth);
+        Assert.AreSame(defenderCard, state.GetCardAt(2, 2));
+        Assert.AreEqual(pointsBack ? PlayerSide.Enemy : PlayerSide.Player, state.GetCellOwner(2, 2));
+        Assert.AreEqual(0, assassinCard.RemainAttacks);
+    }
+
+    [Test]
+    public void DragonLord_ReplacesOnlyALivingControlledMonster()
+    {
+        CardDefinition dragon = LoadDragonLord();
+        MatchState state = MatchRules.CreateMatch(
+            new List<CardDefinition> { testCard, dragon }, new List<CardDefinition> { testCard }, 2, 1, 42);
+        state.DrawCards(PlayerSide.Player, 1);
+        CardInstance dragonCard = state.PlayerHand.Single(card => card.Definition == dragon);
+        CardInstance sacrifice = state.PlayerHand.Single(card => card.Definition == testCard);
+
+        Assert.IsFalse(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Player, dragonCard.Id, 1, 1)));
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Player, sacrifice.Id, 1, 1)));
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Player)));
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Enemy, state.EnemyHand[0].Id, 2, 1)));
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Enemy)));
+        Assert.IsFalse(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Player, dragonCard.Id, 2, 1)));
+
+        sacrifice.ForceSetHealth(0);
+        Assert.IsFalse(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Player, dragonCard.Id, 1, 1)));
+        Assert.AreSame(sacrifice, state.GetCardAt(1, 1));
+        Assert.IsEmpty(state.PlayerDiscardPile);
+        sacrifice.ForceSetHealth(testCard.Health);
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Player, dragonCard.Id, 1, 1)));
+        Assert.AreSame(dragonCard, state.GetCardAt(1, 1));
+        Assert.AreSame(sacrifice, state.PlayerDiscardPile.Single());
+        Assert.IsEmpty(state.PlayerHand);
+        Assert.AreEqual(0, state.PlayerSummonsRemaining);
+    }
+
+    [Test]
+    public void DragonLord_DamagesPointedEnemiesOnTurnStartAndBoostsUnpointedNeighbors()
+    {
+        CardDefinition dragon = LoadDragonLord();
+        CardDefinition ally = new CardDefinition("ally", "Ally", 2, 0, 5, CardType.Monster, new CardDirection(1, 0));
+        CardDefinition enemy = new CardDefinition("enemy", "Enemy", 1, 0, 5, CardType.Monster);
+        MatchState state = MatchRules.CreateMatch(
+            new List<CardDefinition> { dragon, ally, ally, ally }, new List<CardDefinition> { enemy, enemy, enemy }, 4, 4, 42);
+        CardInstance dragonCard = state.PlayerHand.Single(card => card.Definition == dragon);
+
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Player,
+            state.PlayerHand.First(card => card.Definition == ally).Id, 1, 1)));
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Player)));
+        CardInstance eastEnemy = state.EnemyHand[0];
+        eastEnemy.ForceSetHealth(2);
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Enemy, eastEnemy.Id, 2, 1)));
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Enemy)));
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Player, dragonCard.Id, 1, 1)));
+        Assert.AreEqual(2, eastEnemy.CurrentHealth);
+
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Player)));
+        CardInstance northEnemy = state.EnemyHand[0];
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Enemy, northEnemy.Id, 1, 0)));
+        Assert.AreEqual(2, eastEnemy.CurrentHealth);
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Enemy)));
+        Assert.AreEqual(0, eastEnemy.CurrentHealth);
+        Assert.AreEqual(PlayerSide.Player, state.GetCellOwner(2, 1));
+        Assert.AreEqual(3, northEnemy.CurrentHealth);
+        Assert.AreEqual(dragon.Attack, MatchRules.GetAttack(state, dragonCard));
+
+        CardInstance southAlly = state.PlayerHand[0];
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Player, southAlly.Id, 1, 2)));
+        Assert.AreEqual(3, MatchRules.GetAttack(state, southAlly));
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Player)));
+        CardInstance southEastEnemy = state.EnemyHand[0];
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Enemy, southEastEnemy.Id, 2, 2)));
+        Assert.AreEqual(3, northEnemy.CurrentHealth);
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Enemy)));
+        Assert.AreEqual(1, northEnemy.CurrentHealth);
+        Assert.AreEqual(5, southEastEnemy.CurrentHealth);
+        Assert.IsTrue(MatchRules.TryApply(state, new AttackCardAction(state.Id, PlayerSide.Player, southAlly.Id, 1, 0)));
+        Assert.AreEqual(2, southEastEnemy.CurrentHealth);
+
+        CardInstance westAlly = state.PlayerHand[0];
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Player, westAlly.Id, 0, 1)));
+        Assert.AreEqual(2, MatchRules.GetAttack(state, westAlly));
+        dragonCard.ForceSetHealth(0);
+        Assert.AreEqual(2, MatchRules.GetAttack(state, southAlly));
+    }
+
+    [TestCase(PlayerSide.Player)]
+    [TestCase(PlayerSide.Enemy)]
+    public void PlaceCard_RequiresTwoDistinctSacrificesAndUsesTheLastTile(PlayerSide actor)
+    {
+        CardDefinition boss = new CardDefinition("boss", "Boss", 5, 5, 5, CardType.Monster,
+            System.Array.Empty<MonsterEffectEntry>(), System.Array.Empty<CardDirection>(), sacrificeCount: 2);
+        List<CardDefinition> bossDeck = new List<CardDefinition> { testCard, testCard, boss };
+        List<CardDefinition> otherDeck = new List<CardDefinition> { testCard };
+        PlayerSide other = actor == PlayerSide.Player ? PlayerSide.Enemy : PlayerSide.Player;
+        MatchState state = MatchRules.CreateMatch(
+            actor == PlayerSide.Player ? bossDeck : otherDeck,
+            actor == PlayerSide.Enemy ? bossDeck : otherDeck, 3, 3, 42);
+        IReadOnlyList<CardInstance> hand = actor == PlayerSide.Player ? state.PlayerHand : state.EnemyHand;
+        CardInstance bossCard = hand.Single(card => card.Definition == boss);
+        CardInstance[] sacrifices = hand.Where(card => card.Definition == testCard).ToArray();
+
+        if (actor == PlayerSide.Enemy)
+            Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, other)));
+        for (int x = 0; x < sacrifices.Length; x++)
+        {
+            Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, actor, sacrifices[x].Id, x, 0)));
+            Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, actor)));
+            Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, other)));
+        }
+
+        Assert.IsFalse(MatchRules.TryApply(state,
+            new PlaceCardAction(state.Id, actor, bossCard.Id, 1, 0, new[] { sacrifices[1].Id })));
+        Assert.IsFalse(MatchRules.TryApply(state,
+            new PlaceCardAction(state.Id, actor, bossCard.Id, 1, 0, new[] { sacrifices[1].Id, sacrifices[1].Id })));
+        Assert.IsFalse(MatchRules.TryApply(state,
+            new PlaceCardAction(state.Id, actor, bossCard.Id, 0, 0, new[] { sacrifices[0].Id, sacrifices[1].Id })));
+        Assert.AreSame(sacrifices[0], state.GetCardAt(0, 0));
+        Assert.AreSame(sacrifices[1], state.GetCardAt(1, 0));
+        IReadOnlyList<CardInstance> discard = actor == PlayerSide.Player ? state.PlayerDiscardPile : state.EnemyDiscardPile;
+        Assert.IsEmpty(discard);
+
+        PlaceCardAction action = new PlaceCardAction(state.Id, actor, bossCard.Id, 1, 0,
+            new[] { sacrifices[0].Id, sacrifices[1].Id });
+        if (actor == PlayerSide.Enemy)
+            new RandomPlayerAgent(42).RequestAction(state, submitted => action = (PlaceCardAction)submitted);
+
+        Assert.IsTrue(MatchRules.TryApply(state, action));
+        Assert.AreEqual(2, discard.Count);
+        Assert.AreSame(bossCard, state.GetCardAt(action.X, action.Y));
+        Assert.IsNull(state.GetCardAt(1 - action.X, 0));
+        Assert.IsEmpty(hand);
+    }
+
+    private static CardDefinition LoadDragonLord()
+    {
+        MonsterCardData data = AssetDatabase.LoadAssetAtPath<MonsterCardData>("Assets/_Data/_Monster/DragonLord.asset");
+        Assert.IsNotNull(data);
+        CardDefinition dragon = data.ToDefinition();
+        Assert.AreEqual(1, dragon.SacrificeCount);
+        Assert.AreEqual(2, dragon.MonsterEffects.Count);
+        MonsterEffectEntry turnStart = dragon.MonsterEffects.Single(entry => entry.ActivateType == MonsterEffectType.TurnStarted);
+        MonsterEffectEntry aura = dragon.MonsterEffects.Single(entry => entry.ActivateType == MonsterEffectType.Aura);
+        Assert.IsFalse(turnStart.Effect is IMonsterAttackAura);
+        Assert.IsInstanceOf<IMonsterAttackAura>(aura.Effect);
+        return dragon;
+    }
+
+    [TestCase(true)]
+    [TestCase(false)]
+    public void BabyParasite_OnDefeatDiscardsItselfAndKeepsTheTileWithAToken(bool fromAttack)
+    {
+        MonsterCardData data = AssetDatabase.LoadAssetAtPath<MonsterCardData>("Assets/_Data/_Monster/BabyParasite.asset");
+        Assert.IsNotNull(data);
+        CardDefinition parasite = data.ToDefinition();
+        Assert.AreEqual(MonsterEffectType.Die, parasite.MonsterEffects.Single().ActivateType);
+        CardDefinition attacker = new CardDefinition("attacker", "Attacker", parasite.Health, 0, 20, CardType.Monster,
+            new CardDirection(1, 0));
+        MatchState state = MatchRules.CreateMatch(
+            new List<CardDefinition> { attacker, attacker }, new List<CardDefinition> { parasite }, 2, 1, 42);
+        CardInstance attackerCard = state.PlayerHand[0];
+        CardInstance parasiteCard = state.EnemyHand[0];
+
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Player, attackerCard.Id, 1, 1)));
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Player)));
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Enemy, parasiteCard.Id, 2, 1)));
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Enemy)));
+
+        PlayerSide controller = fromAttack ? PlayerSide.Enemy : PlayerSide.Player;
+        state.SetCellOwner(2, 1, controller);
+        int summonsBeforeDefeat = state.PlayerSummonsRemaining;
+        if (fromAttack)
+            Assert.IsTrue(MatchRules.TryApply(state, new AttackCardAction(state.Id, PlayerSide.Player, attackerCard.Id, 1, 0)));
+        else
+            state.DamageBoardMonster(2, 1, parasiteCard.CurrentHealth, captureCellOnDefeat: false);
+
+        CardInstance token = state.GetCardAt(2, 1);
+        Assert.AreSame(parasiteCard, state.EnemyDiscardPile.Single());
+        Assert.AreNotEqual(parasiteCard.Id, token.Id);
+        Assert.AreNotEqual(attackerCard.Id, token.Id);
+        Assert.AreEqual("Parasite Token", token.Definition.Name);
+        Assert.AreEqual(1, token.Definition.Attack);
+        Assert.AreEqual(0, token.Defense);
+        Assert.AreEqual(1, token.CurrentHealth);
+        Assert.AreEqual(controller, token.Owner);
+        Assert.AreEqual(controller, state.GetCellOwner(2, 1));
+        Assert.AreEqual(fromAttack ? 1 : 2, MatchRules.CountOwnedCards(state, controller));
+        Assert.AreEqual(summonsBeforeDefeat, state.PlayerSummonsRemaining);
+
+        state.DamageBoardMonster(2, 1, 1);
+        Assert.AreSame(token, state.GetCardAt(2, 1));
+        Assert.AreNotEqual(controller, state.GetCellOwner(2, 1));
+    }
+
+    [TestCase(true)]
+    [TestCase(false)]
+    public void NightStalker_GainsAttackAndIgnoresReflectionOnlyOnPlacementTurn(bool attacksImmediately)
+    {
+        MonsterCardData data = AssetDatabase.LoadAssetAtPath<MonsterCardData>("Assets/_Data/_Monster/NightStalker.asset");
+        Assert.IsNotNull(data);
+        CardDefinition stalker = data.ToDefinition();
+        Assert.AreEqual(MonsterEffectType.PlacedDown, stalker.MonsterEffects.Single().ActivateType);
+        CardDefinition defender = new CardDefinition("defender", "Defender", 1, 2, 20, CardType.Monster,
+            new CardDirection(-1, 0));
+        MatchState state = MatchRules.CreateMatch(
+            new List<CardDefinition> { stalker, stalker }, new List<CardDefinition> { defender }, 2, 1, 42);
+        CardInstance stalkerCard = state.PlayerHand[0];
+        CardInstance defenderCard = state.EnemyHand[0];
+
+        Assert.AreEqual(stalker.Attack, MatchRules.GetAttack(state, stalkerCard));
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Player)));
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Enemy, defenderCard.Id, 2, 1)));
+        Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Enemy)));
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Player, stalkerCard.Id, 1, 1)));
+        Assert.AreEqual(stalker.Attack + 1, MatchRules.GetAttack(state, stalkerCard));
+
+        if (!attacksImmediately)
+        {
+            Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Player)));
+            Assert.AreEqual(stalker.Attack, MatchRules.GetAttack(state, stalkerCard));
+            Assert.IsTrue(MatchRules.TryApply(state, new EndTurnAction(state.Id, PlayerSide.Enemy)));
+        }
+
+        Assert.IsTrue(MatchRules.TryApply(state, new AttackCardAction(state.Id, PlayerSide.Player, stalkerCard.Id, 1, 0)));
+        Assert.AreEqual(defender.Health - stalker.Attack - (attacksImmediately ? 1 : 0), defenderCard.CurrentHealth);
+        Assert.AreEqual(stalker.Health - (attacksImmediately ? 0 : defender.Defense), stalkerCard.CurrentHealth);
+    }
+
     private MatchState CreateAttackState(out long attackerId)
     {
         List<CardDefinition> cards = new();
