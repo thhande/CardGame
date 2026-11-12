@@ -14,6 +14,7 @@ internal sealed class HandCardView : MonoBehaviour
     [SerializeField] private CardHoldPreview holdPreview;
 
     private MatchManager matchManager;
+    private bool allowPlay;
 
     public CardInstance Card { get; private set; }
 
@@ -24,20 +25,21 @@ internal sealed class HandCardView : MonoBehaviour
         holdPreview.Hide = () => matchManager?.HideCardPreview(holdPreview);
     }
 
-    public void Bind(CardInstance card, MatchManager manager)
+    public void Bind(CardInstance card, MatchManager manager, bool allowPlay = true)
     {
         holdPreview.Cancel();
         Card = card;
         matchManager = manager;
+        this.allowPlay = allowPlay;
         CardDefinition definition = card.Definition;
         bool isSupport = definition.IsSupportCard;
-        bool selected = manager.SelectedHandCard == card;
+        bool selected = allowPlay && manager.SelectedHandCard == card;
 
         frame.color = selected ? Brass : Rim;
         float inset = selected ? 3 : 1;
         surface.rectTransform.offsetMin = Vector2.one * inset;
         surface.rectTransform.offsetMax = -Vector2.one * inset;
-        button.interactable = manager.CurrentState == TurnState.PlayerTurn
+        button.interactable = !allowPlay || manager.CurrentState == TurnState.PlayerTurn
             && (isSupport
                 ? MatchRules.CanPlaySupportCard(manager.State, PlayerSide.Player, card.Id)
                 : definition.Type == CardType.Equip || manager.NormalSummonThisTurn > 0);
@@ -53,6 +55,7 @@ internal sealed class HandCardView : MonoBehaviour
 
     private void OnClicked()
     {
+        if (!allowPlay) return;
         if (Card.Definition.IsSupportCard) matchManager.PlaySupportCard(Card);
         else matchManager.SelectHandCard(Card);
     }

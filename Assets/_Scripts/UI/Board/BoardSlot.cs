@@ -66,7 +66,7 @@ public class BoardSlot : MonoBehaviour
         if (statsText != null)
         {
             statsText.enabled = true;
-            statsText.text = $"<b>{card.Definition.Name}</b>\n<size=13><color=#F1C881>{MatchRules.GetAttack(state, card)} ATK {card.Defense} DEF {card.CurrentHealth} HP</color></size>";
+            statsText.text = $"{MatchRules.GetAttack(state, card)}\u00A0ATK  {card.Defense}\u00A0DEF  {card.CurrentHealth}\u00A0HP";
         }
         if (statsBacking != null) statsBacking.enabled = true;
         if (coordinatesLabel != null) coordinatesLabel.enabled = false;

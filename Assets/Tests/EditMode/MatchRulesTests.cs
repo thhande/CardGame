@@ -606,6 +606,43 @@ public class MatchRulesTests
         }
     }
 
+    [TestCase(2, 0, 3)]
+    [TestCase(int.MaxValue, int.MaxValue, int.MaxValue)]
+    public void BoardSlot_FitsAllStatsForAMonsterWithALongName(int attack, int defense, int health)
+    {
+        var monster = new CardDefinition("monster", new string('M', 100), attack, defense, health, CardType.Monster);
+        MatchState state = MatchRules.CreateMatch(new List<CardDefinition> { monster }, 1, 1, 42);
+        CardInstance card = state.PlayerHand[0];
+        Assert.IsTrue(MatchRules.TryApply(state, new PlaceCardAction(state.Id, PlayerSide.Player, card.Id, 0, 0)));
+
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Prefabs/BoardSlot.prefab");
+        var canvas = new GameObject("Test Canvas", typeof(Canvas));
+        try
+        {
+            Component slot = Object.Instantiate(prefab, canvas.transform).GetComponent("BoardSlot");
+            ((RectTransform)slot.transform).sizeDelta = new Vector2(136, 176);
+            slot.GetType().GetMethod("Init").Invoke(slot, new object[] { 0, 0 });
+            slot.GetType().GetMethod("PlaceCard").Invoke(slot, new object[] { card, state });
+
+            var stats = (Component)new SerializedObject(slot).FindProperty("statsText").objectReferenceValue;
+            var statsType = stats.GetType();
+            string displayed = (string)statsType.GetProperty("text").GetValue(stats);
+            Assert.AreEqual($"{attack}\u00A0ATK  {defense}\u00A0DEF  {health}\u00A0HP", displayed);
+
+            statsType.GetMethod("ForceMeshUpdate").Invoke(stats, new object[] { true, true });
+            Assert.IsFalse((bool)statsType.GetProperty("isTextTruncated").GetValue(stats));
+            Bounds bounds = (Bounds)statsType.GetProperty("textBounds").GetValue(stats);
+            Rect rect = ((RectTransform)stats.transform).rect;
+            Assert.Greater(bounds.size.x, 0);
+            Assert.LessOrEqual(bounds.size.x, rect.width);
+            Assert.LessOrEqual(bounds.size.y, rect.height);
+        }
+        finally
+        {
+            Object.DestroyImmediate(canvas);
+        }
+    }
+
     [Test]
     public void BoardSlot_DarkensPortraitOnlyAtZeroHealth()
     {
@@ -758,6 +795,9 @@ public class MatchRulesTests
             var discard = (Component)view.FindProperty("discardContents").objectReferenceValue;
             Assert.AreSame(content.parent, discard.transform.parent);
             Assert.IsFalse(discard.gameObject.activeSelf);
+            Assert.IsNotNull(discard.GetComponent<HorizontalLayoutGroup>());
+            Assert.AreEqual(ContentSizeFitter.FitMode.PreferredSize,
+                discard.GetComponent<ContentSizeFitter>().horizontalFit);
             Assert.AreSame(content, ((LayoutElement)view.FindProperty("handContentWidth").objectReferenceValue).transform);
             var preview = (Component)view.FindProperty("cardPreview").objectReferenceValue;
             Assert.IsFalse(preview.gameObject.activeSelf);
@@ -825,13 +865,55 @@ public class MatchRulesTests
         Component view = prefab.GetComponent("CardPreviewView");
         Assert.IsNotNull(view);
         SerializedObject serializedView = new SerializedObject(view);
-        foreach (string field in new[] { "frame", "artwork", "title", "stats", "descriptionLabel" })
+        foreach (string field in new[] { "backdrop", "frame", "artwork", "title", "stats", "descriptionLabel" })
             Assert.IsNotNull(serializedView.FindProperty(field).objectReferenceValue, field);
 
         SerializedProperty arrows = serializedView.FindProperty("arrows");
         Assert.AreEqual(8, arrows.arraySize);
         for (int i = 0; i < arrows.arraySize; i++)
             Assert.IsNotNull(arrows.GetArrayElementAtIndex(i).objectReferenceValue);
+    }
+
+    [TestCase("Assets/_Data/_SupportCard/DrawTwo.asset", "HI SUPPORT")]
+    [TestCase("Assets/_Data/_EquipCard/HeavyArmor.asset", "EQUIP")]
+    public void CardPreview_OpponentPlayShowsTheCardNameAndEffect(string cardPath, string cardType)
+    {
+        CardDefinition definition = AssetDatabase.LoadAssetAtPath<CardData>(cardPath).ToDefinition();
+        MatchState state = MatchRules.CreateMatch(new List<CardDefinition> { definition }, 1, 1, 42);
+        GameObject preview = Object.Instantiate(
+            AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Prefabs/CardPreview.prefab"));
+        try
+        {
+            Component view = preview.GetComponent("CardPreviewView");
+            var show = view.GetType().GetMethod("Show",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            bool dismissed = false;
+            System.Action dismiss = () => dismissed = true;
+            show.Invoke(view, new object[] { state.EnemyHand[0], null, new Vector2(800, 1000), 0, dismiss });
+
+            var fields = new SerializedObject(view);
+            var backdrop = (Image)fields.FindProperty("backdrop").objectReferenceValue;
+            string ReadLabel(string field) =>
+                new SerializedObject(fields.FindProperty(field).objectReferenceValue).FindProperty("m_text").stringValue;
+
+            Assert.AreEqual(definition.Name, ReadLabel("title"));
+            Assert.AreEqual($"OPPONENT PLAYED  /  {cardType}", ReadLabel("stats"));
+            Assert.AreEqual(definition.SupportEffect?.Description ?? definition.EquipEffect.Description,
+                ReadLabel("descriptionLabel"));
+            Assert.IsTrue(backdrop.raycastTarget);
+
+            var click = new PointerEventData(null) { button = PointerEventData.InputButton.Left };
+            ((IPointerClickHandler)view).OnPointerClick(click);
+            Assert.IsTrue(dismissed);
+
+            show.Invoke(view, new object[] { state.EnemyHand[0], null, new Vector2(800, 1000), 0, null });
+            Assert.AreEqual(cardType, ReadLabel("stats"));
+            Assert.IsFalse(backdrop.raycastTarget);
+        }
+        finally
+        {
+            Object.DestroyImmediate(preview);
+        }
     }
 
     [TestCase(false, false)]

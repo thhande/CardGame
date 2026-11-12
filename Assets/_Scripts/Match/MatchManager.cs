@@ -238,6 +238,7 @@ public class MatchManager : Singleton<MatchManager>
 
     public bool SubmitAction(MatchAction action)
     {
+        CardInstance opponentPlay = GetOpponentPlayedCard(action);
         if (!MatchRules.TryApply(matchState, action)) return false;
 
         if (action is PlaceCardAction placement)
@@ -278,7 +279,21 @@ public class MatchManager : Singleton<MatchManager>
         SyncBoard();
         if (CurrentState == TurnState.GameOver) SetGameOver();
         else RefreshUI();
+        if (opponentPlay != null && handUI != null) handUI.ShowOpponentPlay(opponentPlay);
         return true;
+    }
+
+    private CardInstance GetOpponentPlayedCard(MatchAction action)
+    {
+        if (matchState == null || action?.Actor != PlayerSide.Enemy) return null;
+
+        long? cardId = action switch
+        {
+            PlaySupportCardAction support => support.CardId,
+            PlayEquipCardAction equip => equip.CardId,
+            _ => null
+        };
+        return cardId.HasValue ? EnemyHand.FirstOrDefault(card => card.Id == cardId.Value) : null;
     }
 
     private IEnumerator EnemyTurnRoutine()
@@ -314,11 +329,15 @@ public class MatchManager : Singleton<MatchManager>
             }
 
             yield return new WaitForSeconds(EnemyActionDelay);
+            if (matchState != activeState || activeState.Turn != TurnState.EnemyTurn) yield break;
             if (!SubmitAction(submittedAction))
             {
                 Debug.LogError("The enemy player agent submitted an invalid action.");
                 yield break;
             }
+
+            while (matchState == activeState && handUI != null && handUI.IsShowingOpponentPlay)
+                yield return null;
         }
 
         if (matchState != activeState || activeState.Turn == TurnState.GameOver) yield break;

@@ -68,6 +68,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1001}
   m_Enabled: 1
   m_Script: {fileID: 11500000, guid: d43ff4ad96264dfda91e67084cf96090, type: 3}
+  backdrop: {fileID: 1004}
   frame: {fileID: 1012}
   artwork: {fileID: 1054}
   title: {fileID: 1034}
