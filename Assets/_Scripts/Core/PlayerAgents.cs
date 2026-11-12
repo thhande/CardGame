@@ -40,42 +40,60 @@ public sealed class RandomPlayerAgent : IPlayerAgent
             return;
         }
 
-        long playableCardId = -1;
-        for (int i = 0; i < state.EnemyHand.Count; i++)
+        if (state.EnemySummonsRemaining > 0
+            && TryFindPlacement(state, out PlaceCardAction placement))
         {
-            if (state.EnemyHand[i].Definition.Type == CardType.Monster)
-            {
-                playableCardId = state.EnemyHand[i].Id;
-                break;
-            }
-        }
-
-        List<int> openCellIndices = new List<int>();
-        for (int y = 0; y < MatchState.Height; y++)
-        {
-            for (int x = 0; x < MatchState.Width; x++)
-            {
-                if (MatchRules.CanPlaceAt(state, x, y))
-                    openCellIndices.Add(y * MatchState.Width + x);
-            }
-        }
-
-        if (state.EnemySummonsRemaining <= 0 || playableCardId < 0 || openCellIndices.Count == 0)
-        {
-            if (TryFindAttack(state, out long attackerId, out CardDirection direction))
-            {
-                submitAction(new AttackCardAction(state.Id, PlayerSide.Enemy, attackerId,
-                    direction.X, direction.Y));
-                return;
-            }
-
-            submitAction(new EndTurnAction(state.Id, PlayerSide.Enemy));
+            submitAction(placement);
             return;
         }
 
-        int cellIndex = openCellIndices[random.Next(openCellIndices.Count)];
-        submitAction(new PlaceCardAction(state.Id, PlayerSide.Enemy, playableCardId,
-            cellIndex % MatchState.Width, cellIndex / MatchState.Width));
+        if (TryFindAttack(state, out long attackerId, out CardDirection direction))
+        {
+            submitAction(new AttackCardAction(state.Id, PlayerSide.Enemy, attackerId, direction.X, direction.Y));
+            return;
+        }
+
+        submitAction(new EndTurnAction(state.Id, PlayerSide.Enemy));
+    }
+
+    private bool TryFindPlacement(MatchState state, out PlaceCardAction action)
+    {
+        List<(int X, int Y)> targets = new List<(int, int)>();
+        foreach (CardInstance card in state.EnemyHand)
+        {
+            if (card.Definition.Type != CardType.Monster) continue;
+            for (int y = 0; y < MatchState.Height; y++)
+            {
+                for (int x = 0; x < MatchState.Width; x++)
+                {
+                    if (MatchRules.CanPlaceAt(state, card, PlayerSide.Enemy, x, y)) targets.Add((x, y));
+                }
+            }
+
+            int sacrificeCount = card.Definition.SacrificeCount;
+            if (targets.Count < Math.Max(1, sacrificeCount)) continue;
+            if (sacrificeCount <= 1)
+            {
+                var target = targets[random.Next(targets.Count)];
+                action = new PlaceCardAction(state.Id, PlayerSide.Enemy, card.Id, target.X, target.Y);
+                return true;
+            }
+
+            long[] sacrificeIds = new long[sacrificeCount];
+            (int X, int Y) destination = default;
+            for (int i = 0; i < sacrificeIds.Length; i++)
+            {
+                int index = random.Next(targets.Count);
+                destination = targets[index];
+                targets.RemoveAt(index);
+                sacrificeIds[i] = state.GetCardAt(destination.X, destination.Y).Id;
+            }
+            action = new PlaceCardAction(state.Id, PlayerSide.Enemy, card.Id, destination.X, destination.Y, sacrificeIds);
+            return true;
+        }
+
+        action = null;
+        return false;
     }
 
     private static bool TryFindEquipPlay(MatchState state, out PlayEquipCardAction action)

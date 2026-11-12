@@ -18,12 +18,15 @@ public sealed class PlaceCardAction : MatchAction
     public long CardId { get; }
     public int X { get; }
     public int Y { get; }
+    public IReadOnlyList<long> SacrificeIds { get; }
 
-    public PlaceCardAction(Guid matchId, PlayerSide actor, long cardId, int x, int y) : base(matchId, actor)
+    public PlaceCardAction(Guid matchId, PlayerSide actor, long cardId, int x, int y,
+        IEnumerable<long> sacrificeIds = null) : base(matchId, actor)
     {
         CardId = cardId;
         X = x;
         Y = y;
+        SacrificeIds = sacrificeIds == null ? Array.Empty<long>() : new List<long>(sacrificeIds).AsReadOnly();
     }
 }
 
@@ -106,9 +109,8 @@ public static class MatchRules
 
         MatchState state = new MatchState(seed);
         Random random = new Random(seed);
-        long nextCardId = 1;
-        BuildDeck(state.MutablePlayerDeck, playerDefinitions, PlayerSide.Player, deckSize, random, ref nextCardId);
-        BuildDeck(state.MutableEnemyDeck, enemyDefinitions, PlayerSide.Enemy, deckSize, random, ref nextCardId);
+        BuildDeck(state, state.MutablePlayerDeck, playerDefinitions, PlayerSide.Player, random);
+        BuildDeck(state, state.MutableEnemyDeck, enemyDefinitions, PlayerSide.Enemy, random);
         DrawCards(state.MutablePlayerDeck, state.MutablePlayerHand, openingHandSize);
         DrawCards(state.MutableEnemyDeck, state.MutableEnemyHand, openingHandSize);
         BeginPlayerTurn(state, false);
@@ -153,7 +155,6 @@ public static class MatchRules
             return TryApplyMonsterEffect(state, monsterEffect);
 
         if (!(action is PlaceCardAction placement)) return false;
-        if (!CanPlaceAt(state, placement.X, placement.Y)) return false;
 
         List<CardInstance> hand;
         int summons;
@@ -177,6 +178,7 @@ public static class MatchRules
         if (handIndex < 0) return false;
         CardInstance card = hand[handIndex];
         if (card.Owner != placement.Actor || card.Definition.Type != CardType.Monster) return false;
+        if (!TryPayPlacementCost(state, card, placement)) return false;
 
         state.PlaceCard(placement.X, placement.Y, card, placement.Actor);
         hand.RemoveAt(handIndex);
@@ -224,6 +226,54 @@ public static class MatchRules
             && state.GetCellState(x, y) == BoardCellState.Empty;
     }
 
+    internal static bool CanPlaceAt(MatchState state, CardInstance card, PlayerSide actor, int x, int y)
+    {
+        return card.Definition.SacrificeCount == 0
+            ? CanPlaceAt(state, x, y)
+            : IsOnBoard(x, y) && CanSacrifice(state, actor, state.GetCardAt(x, y));
+    }
+
+    public static bool CanSacrifice(MatchState state, PlayerSide actor, CardInstance card)
+    {
+        return state != null && card != null && card.IsAlive && card.Definition.Type == CardType.Monster
+            && IsOnBoard(card.X, card.Y) && state.GetCardAt(card.X, card.Y) == card
+            && state.GetCellOwner(card.X, card.Y) == actor;
+    }
+
+    private static bool TryPayPlacementCost(MatchState state, CardInstance card, PlaceCardAction placement)
+    {
+        if (!CanPlaceAt(state, card, placement.Actor, placement.X, placement.Y)) return false;
+        int count = card.Definition.SacrificeCount;
+        if (count == 0) return placement.SacrificeIds.Count == 0;
+
+        CardInstance destination = state.GetCardAt(placement.X, placement.Y);
+        if (count == 1 && placement.SacrificeIds.Count == 0)
+        {
+            Sacrifice(state, destination);
+            return true;
+        }
+
+        if (placement.SacrificeIds.Count != count || placement.SacrificeIds[count - 1] != destination.Id)
+            return false;
+
+        List<CardInstance> sacrifices = new List<CardInstance>();
+        foreach (long id in placement.SacrificeIds)
+        {
+            CardInstance sacrifice = FindBoardCard(state, id);
+            if (!CanSacrifice(state, placement.Actor, sacrifice) || sacrifices.Contains(sacrifice)) return false;
+            sacrifices.Add(sacrifice);
+        }
+
+        foreach (CardInstance sacrifice in sacrifices) Sacrifice(state, sacrifice);
+        return true;
+    }
+
+    private static void Sacrifice(MatchState state, CardInstance sacrifice)
+    {
+        state.RemoveCardAt(sacrifice.X, sacrifice.Y);
+        state.DiscardCard(sacrifice);
+    }
+
     private static bool IsOnBoard(int x, int y)
     {
         return x >= 0 && x < MatchState.Width && y >= 0 && y < MatchState.Height;
@@ -251,6 +301,7 @@ public static class MatchRules
         state.EnemySummonsRemaining = EnemySummonsPerTurn;
         ResetAttackAvailability(state, PlayerSide.Enemy);
         DrawCards(state.MutableEnemyDeck, state.MutableEnemyHand, 1);
+        ResolveTurnStartEffects(state, PlayerSide.Enemy);
     }
 
     private static bool TryApplySupportCard(MatchState state, PlaySupportCardAction action)
@@ -390,6 +441,26 @@ public static class MatchRules
         state.PlayerSummonsRemaining = PlayerSummonsPerTurn;
         ResetAttackAvailability(state, PlayerSide.Player);
         if (drawCard) DrawCards(state.MutablePlayerDeck, state.MutablePlayerHand, 1);
+        ResolveTurnStartEffects(state, PlayerSide.Player);
+    }
+
+    private static void ResolveTurnStartEffects(MatchState state, PlayerSide actor)
+    {
+        for (int y = 0; y < MatchState.Height; y++)
+        {
+            for (int x = 0; x < MatchState.Width; x++)
+            {
+                CardInstance card = state.GetCardAt(x, y);
+                if (card == null || !card.IsAlive || state.GetCellOwner(x, y) != actor) continue;
+                foreach (MonsterEffectEntry entry in card.Definition.MonsterEffects)
+                {
+                    if (entry?.ActivateType != MonsterEffectType.TurnStarted) continue;
+                    MonsterEffectContext context = new MonsterEffectContext(actor, card, state.TurnHistory,
+                        operation => operation.Apply(state, actor, card));
+                    if (entry.Effect.ActiveCondition(context)) entry.Effect.Resolve(context);
+                }
+            }
+        }
     }
 
     private static bool TryApplyAttack(MatchState state, AttackCardAction action)
@@ -398,29 +469,83 @@ public static class MatchRules
                 out CardInstance attacker, out CardInstance target))
             return false;
 
-        int attackerX = attacker.X;
-        int attackerY = attacker.Y;
-        int targetX = target.X;
-        int targetY = target.Y;
         attacker.RemainAttacks -= 1;
-        target.TakeDamage(attacker.Definition.Attack);
-        if (HasDirection(target.AttackDirections,
-                new CardDirection(-action.Direction.X, -action.Direction.Y)))
+        if (!PreventsAttackDamage(target, attacker))
+            target.TakeDamage(GetAttackDamage(state, attacker, target));
+        if (HasDirection(target.AttackDirections, new CardDirection(-action.Direction.X, -action.Direction.Y))
+            && !PreventsReflectDamage(state, attacker))
         {
             attacker.TakeDamage(target.Defense);
         }
 
-        if (target.CurrentHealth <= 0)
-        {
-            state.DiscardEquipment(target);
-            state.SwitchCellOwner(targetX, targetY);
-        }
-        if (attacker.CurrentHealth <= 0)
-        {
-            state.DiscardEquipment(attacker);
-            state.SwitchCellOwner(attackerX, attackerY);
-        }
+        if (!target.IsAlive) state.ResolveDefeat(target);
+        if (!attacker.IsAlive) state.ResolveDefeat(attacker);
         return true;
+    }
+
+    private static int GetAttackDamage(MatchState state, CardInstance attacker, CardInstance target)
+    {
+        foreach (MonsterEffectEntry entry in attacker.Definition.MonsterEffects)
+        {
+            if (entry?.ActivateType == MonsterEffectType.OnAttack
+                && entry.Effect is IAttackDamageOverride damageOverride
+                && damageOverride.TryGetAttackDamage(attacker, target, out int damage))
+                return damage;
+        }
+        return GetAttack(state, attacker);
+    }
+
+    public static int GetAttack(MatchState state, CardInstance card)
+    {
+        int attack = card.Definition.Attack;
+        if (state == null || !card.IsAlive || card.Definition.Type != CardType.Monster
+            || !IsOnBoard(card.X, card.Y) || state.GetCardAt(card.X, card.Y) != card) return attack;
+
+        foreach (MonsterEffectEntry entry in card.Definition.MonsterEffects)
+        {
+            if (entry?.Effect is IMonsterCombatModifier modifier && modifier.IsActive(state, card))
+                attack += modifier.AttackBonus;
+        }
+
+        PlayerSide controller = state.GetCellOwner(card.X, card.Y);
+        for (int y = 0; y < MatchState.Height; y++)
+        {
+            for (int x = 0; x < MatchState.Width; x++)
+            {
+                CardInstance source = state.GetCardAt(x, y);
+                if (source == null || source == card || !source.IsAlive || state.GetCellOwner(x, y) != controller)
+                    continue;
+                foreach (MonsterEffectEntry entry in source.Definition.MonsterEffects)
+                {
+                    if (entry?.ActivateType == MonsterEffectType.Aura && entry.Effect is IMonsterAttackAura aura)
+                        attack += aura.GetAttackBonus(source, card);
+                }
+            }
+        }
+        return attack;
+    }
+
+    private static bool PreventsReflectDamage(MatchState state, CardInstance attacker)
+    {
+        foreach (MonsterEffectEntry entry in attacker.Definition.MonsterEffects)
+        {
+            if (entry?.Effect is IMonsterCombatModifier modifier
+                && modifier.PreventsReflectDamage && modifier.IsActive(state, attacker))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool PreventsAttackDamage(CardInstance target, CardInstance attacker)
+    {
+        foreach (MonsterEffectEntry entry in target.Definition.MonsterEffects)
+        {
+            if (entry?.ActivateType == MonsterEffectType.OnAttacked
+                && entry.Effect is IAttackDamagePrevention prevention
+                && prevention.PreventsAttackDamage(target, attacker))
+                return true;
+        }
+        return false;
     }
 
     private static bool TryGetAttackTarget(MatchState state, PlayerSide actor, long attackerId,
@@ -514,10 +639,10 @@ public static class MatchRules
         return count;
     }
 
-    private static void BuildDeck(List<CardInstance> deck, List<CardDefinition> definition, PlayerSide owner, int count,
-        Random random, ref long nextCardId)
+    private static void BuildDeck(MatchState state, List<CardInstance> deck, List<CardDefinition> definition,
+        PlayerSide owner, Random random)
     {
-        for (int i = 0; i < definition.Count; i++) deck.Add(new CardInstance(nextCardId++, definition[i], owner));
+        for (int i = 0; i < definition.Count; i++) deck.Add(state.CreateCard(definition[i], owner));
         for (int i = deck.Count - 1; i > 0; i--)
         {
             int index = random.Next(i + 1);

@@ -15,7 +15,7 @@ MonoBehaviour:
   <CardName>k__BackingField: Monster Reborn
   <CardDescription>k__BackingField: Revive your monster at 50% max HP and reclaim
     its tile.
-  <Artwork>k__BackingField: {fileID: 0}
+  <Artwork>k__BackingField: {fileID: 21300000, guid: c3af9e72e1e77c04c8994564a984ec38, type: 3}
   <Effect>k__BackingField: {fileID: 11400000, guid: d6690571ff544571bc9d3d3b5f07bcf1, type: 2}
   <ActiveCondition>k__BackingField: {fileID: 11400000, guid: 0d459aae096845ada7019edd14cd4d05, type: 2}
   isHiSupporter: 1

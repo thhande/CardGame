@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 08f5d4fdc41b896419654e6fc17f6176, type: 3}
+  m_Name: DragonLord
+  m_EditorClassIdentifier: 
+  <CardName>k__BackingField: Dragon Lord
+  <CardDescription>k__BackingField: A dragon Lord
+  <Artwork>k__BackingField: {fileID: 21300000, guid: d73b61febda5bfc4f89fc3abda916859, type: 3}
+  <Attack>k__BackingField: 6
+  <Defense>k__BackingField: 5
+  <Health>k__BackingField: 7
+  sacrificeCount: 1
+  effects:
+  - activateType: 7
+    effect: {fileID: 11400000, guid: d55737326bf4431885c50f69013b95dd, type: 2}
+  - activateType: 8
+    effect: {fileID: 11400000, guid: 1f4ad25082b84d9d9d29d345441be5ca, type: 2}
+  legacyEffectType: 0
+  legacyEffect: {fileID: 0}
+  attackDirections:
+  - <X>k__BackingField: 1
+    <Y>k__BackingField: 0
+  - <X>k__BackingField: -1
+    <Y>k__BackingField: 0
+  - <X>k__BackingField: 0
+    <Y>k__BackingField: 1
+  - <X>k__BackingField: 1
+    <Y>k__BackingField: 1
+  - <X>k__BackingField: -1
+    <Y>k__BackingField: 1

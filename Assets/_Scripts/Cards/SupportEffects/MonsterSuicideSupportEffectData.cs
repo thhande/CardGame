@@ -36,6 +36,7 @@ public sealed class MonsterSuicideOperation : ISupportEffectOperation
     public void Apply(MatchState state, PlayerSide actor)
     {
         CardInstance targetedCard = state.GetCardAt(x, y);
-        targetedCard.ForceSetHealth(0);
+        if (targetedCard?.IsAlive == true)
+            state.DamageBoardMonster(x, y, targetedCard.CurrentHealth, captureCellOnDefeat: false);
     }
 }

@@ -10,6 +10,7 @@ public class MonsterCardData : CardData
     [field: SerializeField] public int Attack { get; private set; }
     [field: SerializeField] public int Defense { get; private set; }
     [field: SerializeField] public int Health { get; private set; }
+    [SerializeField, Min(0), FormerlySerializedAs("requiresSacrifice")] private int sacrificeCount;
     [SerializeField] private EffectEntry[] effects = System.Array.Empty<EffectEntry>();
     [SerializeField, HideInInspector, FormerlySerializedAs("<EffectType>k__BackingField")]
     private MonsterEffectType legacyEffectType;
@@ -32,15 +33,13 @@ public class MonsterCardData : CardData
             .Where(direction => direction != null)
             .Select(direction => new CardDirection(direction.X, -direction.Y))
             .ToArray();
-        if (effects.Length == 0)
-            return new CardDefinition(CardName, CardName, Attack, Defense, Health, Type,
-                legacyEffectType, legacyEffect != null ? legacyEffect : null, directions);
-
-        MonsterEffectEntry[] monsterEffects = effects
-            .Where(entry => entry != null && entry.effect != null)
-            .Select(entry => new MonsterEffectEntry(entry.activateType, entry.effect))
-            .ToArray();
-        return new CardDefinition(CardName, CardName, Attack, Defense, Health, Type, monsterEffects, directions);
+        MonsterEffectEntry[] monsterEffects = effects.Length == 0 && legacyEffect != null
+            ? new[] { new MonsterEffectEntry(legacyEffectType, legacyEffect) }
+            : effects.Where(entry => entry != null && entry.effect != null)
+                .Select(entry => new MonsterEffectEntry(entry.activateType, entry.effect))
+                .ToArray();
+        return new CardDefinition(CardName, CardName, Attack, Defense, Health, Type,
+            monsterEffects, directions, sacrificeCount);
     }
 
     public MonsterCardData()
